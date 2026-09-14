@@ -12,24 +12,34 @@ import NodePalette from './NodePalette.vue'
 import ConfigSidebar from './ConfigSidebar.vue'
 
 import type { 
-  WorkflowNode, 
-  WorkflowEdge, 
-  WorkflowCanvas, 
-  NodeType, 
+  Node,
+  Edge,
+  NodeType,
   WorkflowNodeData,
-  EdgeOutlet 
+  EdgeOutlet,
+  CanvasMeta,
 } from '../../types/workflow'
-import { createDefaultNodeConfig, NODE_TYPE_CONFIGS } from '../../types/workflow'
+import { 
+  createDefaultNodeConfig, 
+  NODE_TYPE_CONFIGS,
+  toBeNode,
+  toBeEdge,
+  fromBeNode,
+  fromBeEdge,
+} from '../../types/workflow'
 
 const props = defineProps<{
-  initialCanvas?: WorkflowCanvas
+  initialNodes?: Node[]
+  initialEdges?: Edge[]
+  initialCanvasMeta?: CanvasMeta
   workflowId: number
   workflowName: string
+  workflowVersion: number
 }>()
 
 const emit = defineEmits<{
-  (e: 'save', canvas: WorkflowCanvas): void
-  (e: 'change', canvas: WorkflowCanvas): void
+  (e: 'save', data: { nodes: Node[]; edges: Edge[]; canvas_meta?: CanvasMeta }): void
+  (e: 'change'): void
 }>()
 
 const nodeTypes: Record<string, any> = {
@@ -38,7 +48,7 @@ const nodeTypes: Record<string, any> = {
   human: markRaw(HumanNode),
 }
 
-const selectedNode = ref<WorkflowNode | null>(null)
+const selectedNode = ref<any>(null)
 const isDirty = ref(false)
 const saving = ref(false)
 const isInitialized = ref(false)
@@ -51,27 +61,31 @@ const {
   getEdges,
   setNodes,
   setEdges,
+  getViewport,
 } = useVueFlow()
 
 onMounted(async () => {
   await nextTick()
-  if (props.initialCanvas && !isInitialized.value) {
+  if (!isInitialized.value) {
     isInitialized.value = true
-    if (props.initialCanvas.nodes?.length) {
-      setNodes(props.initialCanvas.nodes)
+    
+    // Convert BE nodes to Vue Flow format
+    if (props.initialNodes?.length) {
+      const vfNodes = props.initialNodes.map(fromBeNode)
+      setNodes(vfNodes)
     }
-    if (props.initialCanvas.edges?.length) {
-      setEdges(props.initialCanvas.edges)
+    
+    // Convert BE edges to Vue Flow format
+    if (props.initialEdges?.length) {
+      const vfEdges = props.initialEdges.map(fromBeEdge)
+      setEdges(vfEdges)
     }
   }
 })
 
 function markDirty() {
   isDirty.value = true
-  emit('change', { 
-    nodes: getNodes.value as WorkflowNode[], 
-    edges: getEdges.value as WorkflowEdge[] 
-  })
+  emit('change')
 }
 
 function handleConnect(connection: any) {
@@ -136,7 +150,7 @@ function onDragOver(event: DragEvent) {
 }
 
 function onNodeClick(event: NodeMouseEvent) {
-  selectedNode.value = event.node as unknown as WorkflowNode
+  selectedNode.value = event.node
 }
 
 function onPaneClick() {
@@ -159,7 +173,7 @@ function updateNodeData(nodeId: string, data: WorkflowNodeData) {
     setNodes(updatedNodes)
     
     if (selectedNode.value?.id === nodeId) {
-      selectedNode.value = { ...selectedNode.value, data } as WorkflowNode
+      selectedNode.value = { ...selectedNode.value, data }
     }
     markDirty()
   }
@@ -181,10 +195,34 @@ function closeSidebar() {
 async function saveWorkflow() {
   saving.value = true
   try {
-    emit('save', { 
-      nodes: getNodes.value as WorkflowNode[], 
-      edges: getEdges.value as WorkflowEdge[] 
-    })
+    // Convert Vue Flow nodes/edges to BE format
+    const vfNodes = getNodes.value
+    const vfEdges = getEdges.value
+    
+    const beNodes: Node[] = vfNodes.map(n => toBeNode({
+      id: n.id,
+      type: n.type || 'script',
+      position: n.position,
+      data: n.data as WorkflowNodeData,
+    }))
+    
+    const beEdges: Edge[] = vfEdges.map(e => toBeEdge({
+      id: e.id,
+      source: e.source,
+      target: e.target,
+      sourceHandle: e.sourceHandle,
+      data: e.data,
+    }))
+    
+    // Get current viewport for canvas_meta
+    const viewport = getViewport()
+    const canvasMeta: CanvasMeta = {
+      viewport_x: viewport.x,
+      viewport_y: viewport.y,
+      zoom: viewport.zoom,
+    }
+    
+    emit('save', { nodes: beNodes, edges: beEdges, canvas_meta: canvasMeta })
   } finally {
     saving.value = false
   }
@@ -196,7 +234,25 @@ function updateNodeCount() {
 }
 
 defineExpose({
-  getCanvas: () => ({ nodes: getNodes.value as WorkflowNode[], edges: getEdges.value as WorkflowEdge[] }),
+  getCanvas: () => {
+    const vfNodes = getNodes.value
+    const vfEdges = getEdges.value
+    return {
+      nodes: vfNodes.map(n => toBeNode({
+        id: n.id,
+        type: n.type || 'script',
+        position: n.position,
+        data: n.data as WorkflowNodeData,
+      })),
+      edges: vfEdges.map(e => toBeEdge({
+        id: e.id,
+        source: e.source,
+        target: e.target,
+        sourceHandle: e.sourceHandle,
+        data: e.data,
+      })),
+    }
+  },
   isDirty: () => isDirty.value,
   setClean: () => { isDirty.value = false },
 })
@@ -207,6 +263,7 @@ defineExpose({
     <div class="designer-toolbar">
       <div class="toolbar-left">
         <h2 class="workflow-title">{{ workflowName }}</h2>
+        <span class="version-badge">v{{ workflowVersion }}</span>
         <span v-if="isDirty" class="unsaved-badge">Unsaved</span>
       </div>
       <div class="toolbar-right">
@@ -298,6 +355,15 @@ defineExpose({
   font-weight: 600;
   color: #1f2937;
   margin: 0;
+}
+
+.version-badge {
+  background: #e0e7ff;
+  color: #3730a3;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
 }
 
 .unsaved-badge {

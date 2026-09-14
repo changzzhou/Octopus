@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { WorkflowNode, ScriptNodeConfig, HttpNodeConfig, HumanNodeConfig, NodeType, WorkflowNodeData } from '../../types/workflow'
+import type { ScriptNodeConfig, HttpNodeConfig, HumanNodeConfig, NodeType, WorkflowNodeData } from '../../types/workflow'
 import { NODE_TYPE_CONFIGS } from '../../types/workflow'
 
 const props = defineProps<{
-  node: WorkflowNode | null
+  node: any | null
 }>()
 
 const emit = defineEmits<{

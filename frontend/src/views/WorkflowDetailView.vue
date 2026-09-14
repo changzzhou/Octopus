@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, onBeforeRouteLeave } from 'vue-router'
-import { getWorkflowDetail, saveWorkflow, type WorkflowDetail } from '../api/workflows'
-import type { WorkflowCanvas } from '../types/workflow'
+import { getWorkflowDetail, saveWorkflow, type WorkflowDetail, type SaveWorkflowRequest } from '../api/workflows'
+import type { Node, Edge, CanvasMeta } from '../types/workflow'
 import WorkflowDesigner from '../components/workflow/WorkflowDesigner.vue'
 
 const route = useRoute()
@@ -33,20 +33,26 @@ async function loadWorkflow() {
   }
 }
 
-async function handleSave(canvas: WorkflowCanvas) {
+async function handleSave(data: { nodes: Node[]; edges: Edge[]; canvas_meta?: CanvasMeta }) {
   if (!workflow.value) return
   
   saveStatus.value = 'saving'
   saveError.value = null
   
   try {
-    const result = await saveWorkflow(workflow.value.id, {
+    const request: SaveWorkflowRequest = {
       version: workflow.value.version,
-      canvas,
-    })
+      nodes: data.nodes,
+      edges: data.edges,
+      canvas_meta: data.canvas_meta,
+    }
+    
+    const result = await saveWorkflow(workflow.value.id, request)
     
     workflow.value.version = result.version || workflow.value.version + 1
-    workflow.value.canvas = canvas
+    workflow.value.nodes = data.nodes
+    workflow.value.edges = data.edges
+    workflow.value.canvas_meta = data.canvas_meta
     saveStatus.value = 'saved'
     designerRef.value?.setClean()
     
@@ -62,7 +68,7 @@ async function handleSave(canvas: WorkflowCanvas) {
   }
 }
 
-function handleCanvasChange(_canvas: WorkflowCanvas) {
+function handleCanvasChange() {
   saveStatus.value = 'idle'
 }
 
@@ -106,6 +112,9 @@ onBeforeUnmount(() => {
         </router-link>
         <span class="header-divider">/</span>
         <span class="current-workflow">{{ workflow?.name || 'Loading...' }}</span>
+        <span v-if="workflow" class="status-badge" :class="workflow.status">
+          {{ workflow.status }}
+        </span>
       </div>
       <nav class="header-right">
         <div v-if="saveStatus === 'saved'" class="save-indicator saved">
@@ -142,7 +151,10 @@ onBeforeUnmount(() => {
         ref="designerRef"
         :workflow-id="workflow.id"
         :workflow-name="workflow.name"
-        :initial-canvas="workflow.canvas"
+        :workflow-version="workflow.version"
+        :initial-nodes="workflow.nodes"
+        :initial-edges="workflow.edges"
+        :initial-canvas-meta="workflow.canvas_meta"
         @save="handleSave"
         @change="handleCanvasChange"
       />
@@ -200,6 +212,29 @@ onBeforeUnmount(() => {
   font-size: 14px;
   font-weight: 500;
   color: #1e293b;
+}
+
+.status-badge {
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.status-badge.draft {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.status-badge.enabled {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.status-badge.disabled {
+  background: #fee2e2;
+  color: #991b1b;
 }
 
 .header-right {

@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { listWorkflows, type Workflow } from '../api/workflows'
+import { listWorkflows, type WorkflowSummary } from '../api/workflows'
 
-const workflows = ref<Workflow[]>([])
+const workflows = ref<WorkflowSummary[]>([])
 const total = ref(0)
 const loading = ref(true)
 const error = ref<string | null>(null)
