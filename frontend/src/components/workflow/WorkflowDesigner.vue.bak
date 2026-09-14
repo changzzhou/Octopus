@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, onMounted, markRaw, nextTick } from 'vue'
-import { VueFlow, useVueFlow, type NodeMouseEvent } from '@vue-flow/core'
+import { ref, watch, onMounted, markRaw } from 'vue'
+import { VueFlow, useVueFlow, type Connection, type NodeMouseEvent } from '@vue-flow/core'
 import { Controls } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
 import { Background, BackgroundVariant } from '@vue-flow/background'
@@ -38,46 +38,59 @@ const nodeTypes: Record<string, any> = {
   human: markRaw(HumanNode),
 }
 
+const nodes = ref<WorkflowNode[]>([])
+const edges = ref<WorkflowEdge[]>([])
 const selectedNode = ref<WorkflowNode | null>(null)
 const isDirty = ref(false)
 const saving = ref(false)
-const isInitialized = ref(false)
 
-const { 
-  screenToFlowCoordinate,
-  addNodes,
-  addEdges,
-  getNodes,
-  getEdges,
-  setNodes,
-  setEdges,
-} = useVueFlow()
+const { onConnect, onNodesChange, onEdgesChange, project, addEdges, addNodes } = useVueFlow()
 
-onMounted(async () => {
-  await nextTick()
-  if (props.initialCanvas && !isInitialized.value) {
-    isInitialized.value = true
-    if (props.initialCanvas.nodes?.length) {
-      setNodes(props.initialCanvas.nodes)
-    }
-    if (props.initialCanvas.edges?.length) {
-      setEdges(props.initialCanvas.edges)
-    }
+onMounted(() => {
+  if (props.initialCanvas) {
+    nodes.value = props.initialCanvas.nodes || []
+    edges.value = props.initialCanvas.edges || []
   }
 })
 
+watch(() => props.initialCanvas, (newCanvas: WorkflowCanvas | undefined) => {
+  if (newCanvas) {
+    nodes.value = newCanvas.nodes || []
+    edges.value = newCanvas.edges || []
+    isDirty.value = false
+  }
+}, { deep: true })
+
 function markDirty() {
   isDirty.value = true
-  emit('change', { 
-    nodes: getNodes.value as WorkflowNode[], 
-    edges: getEdges.value as WorkflowEdge[] 
-  })
+  emit('change', { nodes: nodes.value, edges: edges.value })
 }
 
-function handleConnect(connection: any) {
+onNodesChange((changes: any[]) => {
+  changes.forEach((change: any) => {
+    if (change.type === 'position' && change.dragging === false) {
+      markDirty()
+    } else if (change.type === 'remove') {
+      markDirty()
+      if (selectedNode.value?.id === change.id) {
+        selectedNode.value = null
+      }
+    }
+  })
+})
+
+onEdgesChange((changes: any[]) => {
+  changes.forEach((change: any) => {
+    if (change.type === 'remove') {
+      markDirty()
+    }
+  })
+})
+
+onConnect((connection: Connection) => {
   const outlet: EdgeOutlet = connection.sourceHandle === 'failure' ? 'failure' : 'success'
   
-  const newEdge: any = {
+  const newEdge: WorkflowEdge = {
     id: `e-${connection.source}-${connection.sourceHandle}-${connection.target}`,
     source: connection.source,
     target: connection.target,
@@ -97,23 +110,26 @@ function handleConnect(connection: any) {
   
   addEdges([newEdge])
   markDirty()
-}
+})
 
 function onDrop(event: DragEvent) {
   const type = event.dataTransfer?.getData('application/vueflow-nodetype') as NodeType
   if (!type) return
   
-  event.preventDefault()
+  const canvasEl = event.currentTarget as HTMLElement
+  const vueFlowEl = canvasEl.querySelector('.vue-flow') as HTMLElement
+  if (!vueFlowEl) return
   
-  const position = screenToFlowCoordinate({
-    x: event.clientX,
-    y: event.clientY,
+  const { left, top } = vueFlowEl.getBoundingClientRect()
+  const position = project({
+    x: event.clientX - left,
+    y: event.clientY - top,
   })
   
   const config = NODE_TYPE_CONFIGS[type]
   const nodeId = `${type}-${Date.now()}`
   
-  const newNode: any = {
+  const newNode: WorkflowNode = {
     id: nodeId,
     type,
     position,
@@ -124,7 +140,7 @@ function onDrop(event: DragEvent) {
     },
   }
   
-  addNodes([newNode])
+  addNodes([newNode as any])
   markDirty()
 }
 
@@ -136,40 +152,28 @@ function onDragOver(event: DragEvent) {
 }
 
 function onNodeClick(event: NodeMouseEvent) {
-  selectedNode.value = event.node as unknown as WorkflowNode
+  selectedNode.value = event.node as WorkflowNode
 }
 
 function onPaneClick() {
   selectedNode.value = null
 }
 
-function onNodeDragStop() {
-  markDirty()
-}
-
 function updateNodeData(nodeId: string, data: WorkflowNodeData) {
-  const nodes = getNodes.value
-  const nodeIndex = nodes.findIndex(n => n.id === nodeId)
+  const nodeIndex = nodes.value.findIndex(n => n.id === nodeId)
   if (nodeIndex !== -1) {
-    const updatedNodes = [...nodes]
-    updatedNodes[nodeIndex] = {
-      ...updatedNodes[nodeIndex],
+    nodes.value[nodeIndex] = {
+      ...nodes.value[nodeIndex],
       data,
     }
-    setNodes(updatedNodes)
-    
-    if (selectedNode.value?.id === nodeId) {
-      selectedNode.value = { ...selectedNode.value, data } as WorkflowNode
-    }
+    nodes.value = [...nodes.value]
     markDirty()
   }
 }
 
 function deleteNode(nodeId: string) {
-  const nodes = getNodes.value
-  const edges = getEdges.value
-  setNodes(nodes.filter(n => n.id !== nodeId))
-  setEdges(edges.filter(e => e.source !== nodeId && e.target !== nodeId))
+  nodes.value = nodes.value.filter(n => n.id !== nodeId)
+  edges.value = edges.value.filter(e => e.source !== nodeId && e.target !== nodeId)
   selectedNode.value = null
   markDirty()
 }
@@ -181,22 +185,14 @@ function closeSidebar() {
 async function saveWorkflow() {
   saving.value = true
   try {
-    emit('save', { 
-      nodes: getNodes.value as WorkflowNode[], 
-      edges: getEdges.value as WorkflowEdge[] 
-    })
+    emit('save', { nodes: nodes.value, edges: edges.value })
   } finally {
     saving.value = false
   }
 }
 
-const nodeCount = ref(0)
-function updateNodeCount() {
-  nodeCount.value = getNodes.value.length
-}
-
 defineExpose({
-  getCanvas: () => ({ nodes: getNodes.value as WorkflowNode[], edges: getEdges.value as WorkflowEdge[] }),
+  getCanvas: () => ({ nodes: nodes.value, edges: edges.value }),
   isDirty: () => isDirty.value,
   setClean: () => { isDirty.value = false },
 })
@@ -230,22 +226,22 @@ defineExpose({
         @dragover="onDragOver"
       >
         <VueFlow
+          v-model:nodes="nodes"
+          v-model:edges="edges"
           :node-types="nodeTypes"
           :default-viewport="{ zoom: 1, x: 100, y: 100 }"
           :min-zoom="0.25"
           :max-zoom="2"
+          fit-view-on-init
           @node-click="onNodeClick"
           @pane-click="onPaneClick"
-          @node-drag-stop="onNodeDragStop"
-          @nodes-change="updateNodeCount"
-          @connect="handleConnect"
         >
           <Background :variant="BackgroundVariant.Dots" :gap="20" :size="1" />
           <Controls position="bottom-left" />
           <MiniMap position="bottom-right" />
         </VueFlow>
         
-        <div v-if="nodeCount === 0" class="empty-canvas">
+        <div v-if="nodes.length === 0" class="empty-canvas">
           <div class="empty-icon">🎨</div>
           <p class="empty-title">Start Building Your Workflow</p>
           <p class="empty-hint">Drag nodes from the palette to get started</p>
