@@ -1,3 +1,5 @@
+import type { WorkflowCanvas } from '../types/workflow'
+
 const API_BASE = '/api/v1'
 
 export interface Workflow {
@@ -7,6 +9,11 @@ export interface Workflow {
   status: number
   created_at: string
   updated_at: string
+}
+
+export interface WorkflowDetail extends Workflow {
+  version: number
+  canvas?: WorkflowCanvas
 }
 
 export interface ListWorkflowsResponse {
@@ -23,6 +30,39 @@ export async function listWorkflows(page = 1, pageSize = 20): Promise<ListWorkfl
 export async function getWorkflow(id: number): Promise<{ workflow: Workflow }> {
   const res = await fetch(`${API_BASE}/workflows/${id}`)
   if (!res.ok) throw new Error('Failed to fetch workflow')
+  return res.json()
+}
+
+export async function getWorkflowDetail(id: number): Promise<{ workflow: WorkflowDetail }> {
+  const res = await fetch(`${API_BASE}/workflows/${id}`)
+  if (!res.ok) throw new Error('Failed to fetch workflow')
+  const data = await res.json()
+  
+  const workflow: WorkflowDetail = {
+    ...data.workflow,
+    version: data.workflow.version || 1,
+    canvas: data.workflow.canvas || { nodes: [], edges: [] },
+  }
+  return { workflow }
+}
+
+export interface SaveWorkflowRequest {
+  name?: string
+  description?: string
+  version: number
+  canvas: WorkflowCanvas
+}
+
+export async function saveWorkflow(id: number, data: SaveWorkflowRequest): Promise<{ version: number }> {
+  const res = await fetch(`${API_BASE}/workflows/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({}))
+    throw new Error(error.message || 'Failed to save workflow')
+  }
   return res.json()
 }
 

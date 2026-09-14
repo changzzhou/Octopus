@@ -1,97 +1,294 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
-import { getWorkflow, type Workflow } from '../api/workflows'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { useRoute, onBeforeRouteLeave } from 'vue-router'
+import { getWorkflowDetail, saveWorkflow, type WorkflowDetail } from '../api/workflows'
+import type { WorkflowCanvas } from '../types/workflow'
+import WorkflowDesigner from '../components/workflow/WorkflowDesigner.vue'
 
 const route = useRoute()
-const workflow = ref<Workflow | null>(null)
+
+const workflow = ref<WorkflowDetail | null>(null)
 const loading = ref(true)
 const error = ref<string | null>(null)
+const saveStatus = ref<'idle' | 'saving' | 'saved' | 'error'>('idle')
+const saveError = ref<string | null>(null)
+const designerRef = ref<InstanceType<typeof WorkflowDesigner> | null>(null)
 
 onMounted(async () => {
+  await loadWorkflow()
+})
+
+async function loadWorkflow() {
+  loading.value = true
+  error.value = null
   try {
     const id = Number(route.params.id)
-    const data = await getWorkflow(id)
+    const data = await getWorkflowDetail(id)
     workflow.value = data.workflow
   } catch (e) {
     error.value = 'Failed to load workflow'
+    console.error(e)
   } finally {
     loading.value = false
   }
+}
+
+async function handleSave(canvas: WorkflowCanvas) {
+  if (!workflow.value) return
+  
+  saveStatus.value = 'saving'
+  saveError.value = null
+  
+  try {
+    const result = await saveWorkflow(workflow.value.id, {
+      version: workflow.value.version,
+      canvas,
+    })
+    
+    workflow.value.version = result.version || workflow.value.version + 1
+    workflow.value.canvas = canvas
+    saveStatus.value = 'saved'
+    designerRef.value?.setClean()
+    
+    setTimeout(() => {
+      if (saveStatus.value === 'saved') {
+        saveStatus.value = 'idle'
+      }
+    }, 2000)
+  } catch (e) {
+    saveStatus.value = 'error'
+    saveError.value = e instanceof Error ? e.message : 'Failed to save workflow'
+    console.error(e)
+  }
+}
+
+function handleCanvasChange(_canvas: WorkflowCanvas) {
+  saveStatus.value = 'idle'
+}
+
+onBeforeRouteLeave((_to, _from, next) => {
+  if (designerRef.value?.isDirty()) {
+    const answer = window.confirm('You have unsaved changes. Are you sure you want to leave?')
+    if (!answer) {
+      next(false)
+      return
+    }
+  }
+  next()
+})
+
+function handleBeforeUnload(e: BeforeUnloadEvent) {
+  if (designerRef.value?.isDirty()) {
+    e.preventDefault()
+    e.returnValue = ''
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('beforeunload', handleBeforeUnload)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('beforeunload', handleBeforeUnload)
 })
 </script>
 
 <template>
-  <div class="min-h-screen bg-slate-100 dark:bg-slate-900">
-    <header class="bg-white dark:bg-slate-800 shadow">
-      <div class="container mx-auto px-4 py-4 flex items-center justify-between">
-        <router-link to="/" class="text-2xl font-bold text-purple-600 dark:text-purple-400">
+  <div class="workflow-detail-page">
+    <header class="page-header">
+      <div class="header-left">
+        <router-link to="/" class="logo">
           🐙 Octopus
         </router-link>
-        <nav class="space-x-4">
-          <router-link 
-            to="/workflows" 
-            class="text-slate-600 dark:text-slate-300 hover:text-purple-600 dark:hover:text-purple-400"
-          >
-            ← Back to Workflows
-          </router-link>
-        </nav>
+        <span class="header-divider">/</span>
+        <router-link to="/workflows" class="breadcrumb">
+          Workflows
+        </router-link>
+        <span class="header-divider">/</span>
+        <span class="current-workflow">{{ workflow?.name || 'Loading...' }}</span>
       </div>
+      <nav class="header-right">
+        <div v-if="saveStatus === 'saved'" class="save-indicator saved">
+          ✓ Saved
+        </div>
+        <div v-else-if="saveStatus === 'error'" class="save-indicator error" :title="saveError || undefined">
+          ⚠ Error saving
+        </div>
+        <router-link 
+          to="/workflows" 
+          class="back-link"
+        >
+          ← Back
+        </router-link>
+      </nav>
     </header>
 
-    <main class="container mx-auto px-4 py-8">
-      <div v-if="loading" class="text-center py-12 text-slate-500">
-        Loading workflow...
+    <main class="page-content">
+      <div v-if="loading" class="loading-state">
+        <div class="spinner"></div>
+        <p>Loading workflow...</p>
       </div>
 
-      <div v-else-if="error" class="text-center py-12 text-red-500">
-        {{ error }}
+      <div v-else-if="error" class="error-state">
+        <div class="error-icon">⚠️</div>
+        <p>{{ error }}</p>
+        <button class="btn btn-secondary" @click="loadWorkflow">
+          Try Again
+        </button>
       </div>
 
-      <div v-else-if="workflow" class="max-w-4xl mx-auto">
-        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-8">
-          <h1 class="text-3xl font-bold text-slate-900 dark:text-white mb-4">
-            {{ workflow.name }}
-          </h1>
-          
-          <p class="text-slate-600 dark:text-slate-400 mb-6">
-            {{ workflow.description || 'No description' }}
-          </p>
-
-          <div class="grid grid-cols-2 gap-4 text-sm">
-            <div class="bg-slate-50 dark:bg-slate-700 rounded-lg p-4">
-              <div class="text-slate-500 dark:text-slate-400">ID</div>
-              <div class="font-mono text-slate-900 dark:text-white">{{ workflow.id }}</div>
-            </div>
-            <div class="bg-slate-50 dark:bg-slate-700 rounded-lg p-4">
-              <div class="text-slate-500 dark:text-slate-400">Status</div>
-              <div class="font-medium text-slate-900 dark:text-white">
-                {{ workflow.status === 0 ? 'Draft' : 'Active' }}
-              </div>
-            </div>
-            <div class="bg-slate-50 dark:bg-slate-700 rounded-lg p-4">
-              <div class="text-slate-500 dark:text-slate-400">Created</div>
-              <div class="text-slate-900 dark:text-white">{{ workflow.created_at }}</div>
-            </div>
-            <div class="bg-slate-50 dark:bg-slate-700 rounded-lg p-4">
-              <div class="text-slate-500 dark:text-slate-400">Updated</div>
-              <div class="text-slate-900 dark:text-white">{{ workflow.updated_at }}</div>
-            </div>
-          </div>
-
-          <div class="mt-8 p-6 bg-purple-50 dark:bg-purple-900/20 rounded-xl border-2 border-dashed border-purple-200 dark:border-purple-800">
-            <div class="text-center">
-              <div class="text-4xl mb-2">🎨</div>
-              <h3 class="text-lg font-medium text-purple-700 dark:text-purple-300 mb-2">
-                DAG Canvas Coming Soon
-              </h3>
-              <p class="text-sm text-purple-600 dark:text-purple-400">
-                Vue Flow integration will be added in FE-2
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
+      <WorkflowDesigner
+        v-else-if="workflow"
+        ref="designerRef"
+        :workflow-id="workflow.id"
+        :workflow-name="workflow.name"
+        :initial-canvas="workflow.canvas"
+        @save="handleSave"
+        @change="handleCanvasChange"
+      />
     </main>
   </div>
 </template>
+
+<style scoped>
+.workflow-detail-page {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: #f1f5f9;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 20px;
+  height: 56px;
+  background: white;
+  border-bottom: 1px solid #e2e8f0;
+  flex-shrink: 0;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.logo {
+  font-size: 20px;
+  font-weight: 700;
+  color: #7c3aed;
+  text-decoration: none;
+}
+
+.header-divider {
+  color: #cbd5e1;
+}
+
+.breadcrumb {
+  color: #64748b;
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.breadcrumb:hover {
+  color: #7c3aed;
+}
+
+.current-workflow {
+  font-size: 14px;
+  font-weight: 500;
+  color: #1e293b;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.save-indicator {
+  font-size: 13px;
+  padding: 4px 10px;
+  border-radius: 12px;
+}
+
+.save-indicator.saved {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.save-indicator.error {
+  background: #fee2e2;
+  color: #991b1b;
+  cursor: help;
+}
+
+.back-link {
+  color: #64748b;
+  text-decoration: none;
+  font-size: 14px;
+  transition: color 0.2s;
+}
+
+.back-link:hover {
+  color: #7c3aed;
+}
+
+.page-content {
+  flex: 1;
+  overflow: hidden;
+}
+
+.loading-state,
+.error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 16px;
+  color: #64748b;
+}
+
+.spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #e2e8f0;
+  border-top-color: #7c3aed;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.error-icon {
+  font-size: 48px;
+}
+
+.error-state p {
+  color: #dc2626;
+}
+
+.btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-secondary {
+  background: #e2e8f0;
+  color: #475569;
+}
+
+.btn-secondary:hover {
+  background: #cbd5e1;
+}
+</style>
