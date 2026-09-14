@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, onMounted, markRaw, nextTick } from 'vue'
-import { VueFlow, useVueFlow, type NodeMouseEvent } from '@vue-flow/core'
+import { ref, onMounted, markRaw, nextTick, computed } from 'vue'
+import { VueFlow, type NodeMouseEvent, type VueFlowStore } from '@vue-flow/core'
 import { Controls } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
 import { Background, BackgroundVariant } from '@vue-flow/background'
@@ -51,35 +51,29 @@ const nodeTypes: Record<string, any> = {
 const selectedNode = ref<any>(null)
 const isDirty = ref(false)
 const saving = ref(false)
-const isInitialized = ref(false)
 
-const { 
-  screenToFlowCoordinate,
-  addNodes,
-  addEdges,
-  getNodes,
-  getEdges,
-  setNodes,
-  setEdges,
-  getViewport,
-} = useVueFlow()
+const flowId = `workflow-${props.workflowId}`
+
+const nodes = ref<any[]>([])
+const edges = ref<any[]>([])
+
+const nodeCount = computed(() => nodes.value.length)
+
+const vfInstance = ref<VueFlowStore | null>(null)
+
+function onInit(instance: VueFlowStore) {
+  vfInstance.value = instance
+}
 
 onMounted(async () => {
   await nextTick()
-  if (!isInitialized.value) {
-    isInitialized.value = true
-    
-    // Convert BE nodes to Vue Flow format
-    if (props.initialNodes?.length) {
-      const vfNodes = props.initialNodes.map(fromBeNode)
-      setNodes(vfNodes)
-    }
-    
-    // Convert BE edges to Vue Flow format
-    if (props.initialEdges?.length) {
-      const vfEdges = props.initialEdges.map(fromBeEdge)
-      setEdges(vfEdges)
-    }
+  
+  if (props.initialNodes?.length) {
+    nodes.value = props.initialNodes.map(fromBeNode)
+  }
+  
+  if (props.initialEdges?.length) {
+    edges.value = props.initialEdges.map(fromBeEdge)
   }
 })
 
@@ -92,7 +86,7 @@ function handleConnect(connection: any) {
   const outlet: EdgeOutlet = connection.sourceHandle === 'failure' ? 'failure' : 'success'
   
   const newEdge: any = {
-    id: `e-${connection.source}-${connection.sourceHandle}-${connection.target}`,
+    id: `e-${connection.source}-${connection.sourceHandle}-${connection.target}-${Date.now()}`,
     source: connection.source,
     target: connection.target,
     sourceHandle: connection.sourceHandle,
@@ -109,7 +103,7 @@ function handleConnect(connection: any) {
     labelBgPadding: [4, 4] as [number, number],
   }
   
-  addEdges([newEdge])
+  edges.value = [...edges.value, newEdge]
   markDirty()
 }
 
@@ -119,7 +113,9 @@ function onDrop(event: DragEvent) {
   
   event.preventDefault()
   
-  const position = screenToFlowCoordinate({
+  if (!vfInstance.value) return
+  
+  const position = vfInstance.value.screenToFlowCoordinate({
     x: event.clientX,
     y: event.clientY,
   })
@@ -138,8 +134,10 @@ function onDrop(event: DragEvent) {
     },
   }
   
-  addNodes([newNode])
-  markDirty()
+  vfInstance.value.addNodes([newNode])
+  nextTick(() => {
+    markDirty()
+  })
 }
 
 function onDragOver(event: DragEvent) {
@@ -157,20 +155,15 @@ function onPaneClick() {
   selectedNode.value = null
 }
 
-function onNodeDragStop() {
-  markDirty()
-}
-
 function updateNodeData(nodeId: string, data: WorkflowNodeData) {
-  const nodes = getNodes.value
-  const nodeIndex = nodes.findIndex(n => n.id === nodeId)
+  const nodeIndex = nodes.value.findIndex(n => n.id === nodeId)
   if (nodeIndex !== -1) {
-    const updatedNodes = [...nodes]
+    const updatedNodes = [...nodes.value]
     updatedNodes[nodeIndex] = {
       ...updatedNodes[nodeIndex],
       data,
     }
-    setNodes(updatedNodes)
+    nodes.value = updatedNodes
     
     if (selectedNode.value?.id === nodeId) {
       selectedNode.value = { ...selectedNode.value, data }
@@ -180,10 +173,8 @@ function updateNodeData(nodeId: string, data: WorkflowNodeData) {
 }
 
 function deleteNode(nodeId: string) {
-  const nodes = getNodes.value
-  const edges = getEdges.value
-  setNodes(nodes.filter(n => n.id !== nodeId))
-  setEdges(edges.filter(e => e.source !== nodeId && e.target !== nodeId))
+  nodes.value = nodes.value.filter(n => n.id !== nodeId)
+  edges.value = edges.value.filter(e => e.source !== nodeId && e.target !== nodeId)
   selectedNode.value = null
   markDirty()
 }
@@ -195,9 +186,8 @@ function closeSidebar() {
 async function saveWorkflow() {
   saving.value = true
   try {
-    // Convert Vue Flow nodes/edges to BE format
-    const vfNodes = getNodes.value
-    const vfEdges = getEdges.value
+    const vfNodes = nodes.value
+    const vfEdges = edges.value
     
     const beNodes: Node[] = vfNodes.map(n => toBeNode({
       id: n.id,
@@ -214,12 +204,14 @@ async function saveWorkflow() {
       data: e.data,
     }))
     
-    // Get current viewport for canvas_meta
-    const viewport = getViewport()
-    const canvasMeta: CanvasMeta = {
-      viewport_x: viewport.x,
-      viewport_y: viewport.y,
-      zoom: viewport.zoom,
+    let canvasMeta: CanvasMeta | undefined
+    if (vfInstance.value) {
+      const viewport = vfInstance.value.getViewport()
+      canvasMeta = {
+        viewport_x: viewport.x,
+        viewport_y: viewport.y,
+        zoom: viewport.zoom,
+      }
     }
     
     emit('save', { nodes: beNodes, edges: beEdges, canvas_meta: canvasMeta })
@@ -228,15 +220,10 @@ async function saveWorkflow() {
   }
 }
 
-const nodeCount = ref(0)
-function updateNodeCount() {
-  nodeCount.value = getNodes.value.length
-}
-
 defineExpose({
   getCanvas: () => {
-    const vfNodes = getNodes.value
-    const vfEdges = getEdges.value
+    const vfNodes = nodes.value
+    const vfEdges = edges.value
     return {
       nodes: vfNodes.map(n => toBeNode({
         id: n.id,
@@ -287,15 +274,18 @@ defineExpose({
         @dragover="onDragOver"
       >
         <VueFlow
+          :id="flowId"
+          v-model:nodes="nodes"
+          v-model:edges="edges"
           :node-types="nodeTypes"
           :default-viewport="{ zoom: 1, x: 100, y: 100 }"
           :min-zoom="0.25"
           :max-zoom="2"
           @node-click="onNodeClick"
           @pane-click="onPaneClick"
-          @node-drag-stop="onNodeDragStop"
-          @nodes-change="updateNodeCount"
+          @node-drag-stop="markDirty"
           @connect="handleConnect"
+          @vue-flow-init="onInit"
         >
           <Background :variant="BackgroundVariant.Dots" :gap="20" :size="1" />
           <Controls position="bottom-left" />
