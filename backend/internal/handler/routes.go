@@ -27,6 +27,12 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Handler: GetRunHandler(serverCtx),
 			},
 			{
+				// SSE stream for run events
+				Method:  http.MethodGet,
+				Path:    "/runs/:runId/events",
+				Handler: GetRunEventsHandler(serverCtx),
+			},
+			{
 				// Get run steps
 				Method:  http.MethodGet,
 				Path:    "/runs/:runId/steps",

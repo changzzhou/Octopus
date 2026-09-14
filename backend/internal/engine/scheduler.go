@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"backend/internal/model"
+	"backend/internal/sse"
 	"backend/internal/types"
 
 	"github.com/zeromicro/go-zero/core/logx"
@@ -45,10 +46,23 @@ func (s *Scheduler) StartRun(ctx context.Context, run *model.WorkflowRuns) error
 		return fmt.Errorf("failed to parse definition: %w", err)
 	}
 
+	hub := sse.GetHub()
+
 	if len(def.Nodes) == 0 {
+		oldStatus := run.Status
 		run.Status = RunStatusSucceeded
 		run.FinishedAt = sql.NullTime{Time: time.Now(), Valid: true}
-		return s.runsModel.Update(ctx, run)
+		if err := s.runsModel.Update(ctx, run); err != nil {
+			return err
+		}
+		hub.Publish(int64(run.Id), int64(run.WorkflowId), sse.EventRunStatusChanged, sse.RunStatusChangedPayload{
+			FromStatus: oldStatus,
+			ToStatus:   run.Status,
+		})
+		hub.Publish(int64(run.Id), int64(run.WorkflowId), sse.EventRunTerminal, sse.RunTerminalPayload{
+			FinalStatus: run.Status,
+		})
+		return nil
 	}
 
 	for _, node := range def.Nodes {
@@ -67,11 +81,17 @@ func (s *Scheduler) StartRun(ctx context.Context, run *model.WorkflowRuns) error
 		}
 	}
 
+	oldStatus := run.Status
 	run.Status = RunStatusRunning
 	run.StartedAt = sql.NullTime{Time: time.Now(), Valid: true}
 	if err := s.runsModel.Update(ctx, run); err != nil {
 		return fmt.Errorf("failed to update run status: %w", err)
 	}
+
+	hub.Publish(int64(run.Id), int64(run.WorkflowId), sse.EventRunStatusChanged, sse.RunStatusChangedPayload{
+		FromStatus: oldStatus,
+		ToStatus:   run.Status,
+	})
 
 	return s.advanceRun(ctx, run.Id, run.WorkflowId, &def)
 }
@@ -237,22 +257,38 @@ func (s *Scheduler) findNode(def *DefinitionSnapshot, nodeId string) *types.Node
 
 // executeNode executes a single node
 func (s *Scheduler) executeNode(ctx context.Context, runId, workflowId uint64, step *model.WorkflowRunSteps, node *types.Node, def *DefinitionSnapshot) error {
+	hub := sse.GetHub()
+	oldStatus := step.Status
+
 	step.Status = StepStatusRunning
 	step.StartedAt = sql.NullTime{Time: time.Now(), Valid: true}
 	if err := s.stepsModel.Update(ctx, step); err != nil {
 		return fmt.Errorf("failed to update step status: %w", err)
 	}
 
+	hub.Publish(int64(runId), int64(workflowId), sse.EventStepStatusChanged, sse.StepStatusChangedPayload{
+		StepId: step.NodeId,
+		From:   oldStatus,
+		To:     step.Status,
+	})
+
 	if IsWorkerDispatchType(node.Type) {
 		return s.dispatchToWorker(ctx, runId, workflowId, step, node)
 	}
 
+	oldStatus = step.Status
 	step.Status = StepStatusSucceeded
 	step.FinishedAt = sql.NullTime{Time: time.Now(), Valid: true}
 	step.OutputData = sql.NullString{String: `{"message":"in-scheduler execution completed"}`, Valid: true}
 	if err := s.stepsModel.Update(ctx, step); err != nil {
 		return fmt.Errorf("failed to update step completion: %w", err)
 	}
+
+	hub.Publish(int64(runId), int64(workflowId), sse.EventStepStatusChanged, sse.StepStatusChangedPayload{
+		StepId: step.NodeId,
+		From:   oldStatus,
+		To:     step.Status,
+	})
 
 	run, err := s.runsModel.FindOne(ctx, runId)
 	if err != nil {
@@ -269,17 +305,28 @@ func (s *Scheduler) executeNode(ctx context.Context, runId, workflowId uint64, s
 
 // dispatchToWorker dispatches a task to the worker queue
 func (s *Scheduler) dispatchToWorker(ctx context.Context, runId, workflowId uint64, step *model.WorkflowRunSteps, node *types.Node) error {
+	hub := sse.GetHub()
 	var payload interface{}
 	if step.NodeConfig.Valid && step.NodeConfig.String != "" {
 		_ = json.Unmarshal([]byte(step.NodeConfig.String), &payload)
 	}
 
 	if node.Type == NodeTypeHuman {
+		oldStatus := step.Status
 		step.Status = StepStatusWaitingHuman
 		if err := s.stepsModel.Update(ctx, step); err != nil {
 			return fmt.Errorf("failed to update step to waiting_human: %w", err)
 		}
 		logx.Infof("Step %d (node %s) is waiting for human input", step.Id, step.NodeId)
+
+		hub.Publish(int64(runId), int64(workflowId), sse.EventStepStatusChanged, sse.StepStatusChangedPayload{
+			StepId: step.NodeId,
+			From:   oldStatus,
+			To:     step.Status,
+		})
+		hub.Publish(int64(runId), int64(workflowId), sse.EventHumanWaiting, sse.HumanWaitingPayload{
+			StepId: step.NodeId,
+		})
 		return nil
 	}
 
@@ -326,6 +373,9 @@ func (s *Scheduler) checkRunCompletion(ctx context.Context, runId uint64, steps 
 		return fmt.Errorf("failed to get run: %w", err)
 	}
 
+	hub := sse.GetHub()
+	oldStatus := run.Status
+
 	if anyFailed {
 		run.Status = RunStatusFailed
 	} else if anyWaiting {
@@ -335,7 +385,19 @@ func (s *Scheduler) checkRunCompletion(ctx context.Context, runId uint64, steps 
 	}
 	run.FinishedAt = sql.NullTime{Time: time.Now(), Valid: true}
 
-	return s.runsModel.Update(ctx, run)
+	if err := s.runsModel.Update(ctx, run); err != nil {
+		return err
+	}
+
+	hub.Publish(int64(runId), int64(run.WorkflowId), sse.EventRunStatusChanged, sse.RunStatusChangedPayload{
+		FromStatus: oldStatus,
+		ToStatus:   run.Status,
+	})
+	hub.Publish(int64(runId), int64(run.WorkflowId), sse.EventRunTerminal, sse.RunTerminalPayload{
+		FinalStatus: run.Status,
+	})
+
+	return nil
 }
 
 // HandleTaskResult processes a task result from the worker
@@ -355,8 +417,12 @@ func (s *Scheduler) HandleTaskResult(ctx context.Context, resp *TaskResponse) er
 		return fmt.Errorf("failed to find step: %w", err)
 	}
 
+	hub := sse.GetHub()
+	oldStatus := step.Status
+
 	step.FinishedAt = sql.NullTime{Time: time.Now(), Valid: true}
 
+	var errorSummary string
 	if resp.Status == "success" {
 		step.Status = StepStatusSucceeded
 		if resp.Result != nil {
@@ -366,11 +432,19 @@ func (s *Scheduler) HandleTaskResult(ctx context.Context, resp *TaskResponse) er
 	} else {
 		step.Status = StepStatusFailed
 		step.ErrorMessage = sql.NullString{String: resp.Error, Valid: true}
+		errorSummary = resp.Error
 	}
 
 	if err := s.stepsModel.Update(ctx, step); err != nil {
 		return fmt.Errorf("failed to update step: %w", err)
 	}
+
+	hub.Publish(int64(runId), int64(workflowId), sse.EventStepStatusChanged, sse.StepStatusChangedPayload{
+		StepId:       step.NodeId,
+		From:         oldStatus,
+		To:           step.Status,
+		ErrorSummary: errorSummary,
+	})
 
 	run, err := s.runsModel.FindOne(ctx, runId)
 	if err != nil {
