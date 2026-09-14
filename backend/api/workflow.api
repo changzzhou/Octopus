@@ -15,56 +15,164 @@ type HealthResp {
 	Version string `json:"version"`
 }
 
-// Workflow types
-type Workflow {
+// Node position
+type Position {
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
+}
+
+// Workflow Node
+type Node {
+	Id            string   `json:"id"`
+	Type          string   `json:"type"` // script|http|human
+	Name          string   `json:"name"`
+	Position      Position `json:"position"`
+	Config        string   `json:"config,optional"` // JSON string
+	CredentialRef string   `json:"credential_ref,optional"`
+}
+
+// Workflow Edge
+type Edge {
+	Id     string `json:"id"`
+	Source string `json:"source"`
+	Target string `json:"target"`
+	Outlet string `json:"outlet"` // success|failure
+	Label  string `json:"label,optional"`
+}
+
+// Canvas metadata
+type CanvasMeta {
+	ViewportX float64 `json:"viewport_x,optional"`
+	ViewportY float64 `json:"viewport_y,optional"`
+	Zoom      float64 `json:"zoom,optional"`
+}
+
+// Workflow summary for list view
+type WorkflowSummary {
 	Id          int64  `json:"id"`
 	Name        string `json:"name"`
 	Description string `json:"description,optional"`
-	Status      int    `json:"status"`
+	Status      string `json:"status"` // draft|enabled|disabled
+	Version     int    `json:"version"`
 	CreatedAt   string `json:"created_at"`
 	UpdatedAt   string `json:"updated_at"`
 }
 
+// Workflow detail with nodes/edges
+type WorkflowDetail {
+	Id              int64       `json:"id"`
+	Name            string      `json:"name"`
+	Description     string      `json:"description,optional"`
+	Status          string      `json:"status"` // draft|enabled|disabled
+	Version         int         `json:"version"`
+	Nodes           []Node      `json:"nodes"`
+	Edges           []Edge      `json:"edges"`
+	EntryNodeId     string      `json:"entry_node_id,optional"`
+	VariablesSchema string      `json:"variables_schema,optional"` // JSON string
+	CanvasMeta      *CanvasMeta `json:"canvas_meta,optional"`
+	CreatedBy       string      `json:"created_by,optional"`
+	UpdatedBy       string      `json:"updated_by,optional"`
+	CreatedAt       string      `json:"created_at"`
+	UpdatedAt       string      `json:"updated_at"`
+}
+
+// List workflows
+type ListWorkflowsReq {
+	Page     int    `form:"page,optional,default=1"`
+	PageSize int    `form:"page_size,optional,default=20"`
+	Status   string `form:"status,optional"` // filter by status
+}
+
+type ListWorkflowsResp {
+	Total     int64             `json:"total"`
+	Workflows []WorkflowSummary `json:"workflows"`
+}
+
+// Create workflow
 type CreateWorkflowReq {
-	Name        string `json:"name"`
-	Description string `json:"description,optional"`
+	Name            string      `json:"name"`
+	Description     string      `json:"description,optional"`
+	Nodes           []Node      `json:"nodes,optional"`
+	Edges           []Edge      `json:"edges,optional"`
+	EntryNodeId     string      `json:"entry_node_id,optional"`
+	VariablesSchema string      `json:"variables_schema,optional"`
+	CanvasMeta      *CanvasMeta `json:"canvas_meta,optional"`
 }
 
 type CreateWorkflowResp {
-	Id int64 `json:"id"`
+	Id      int64  `json:"id"`
+	Version int    `json:"version"`
+	Status  string `json:"status"`
 }
 
+// Get workflow
 type GetWorkflowReq {
 	Id int64 `path:"id"`
 }
 
 type GetWorkflowResp {
-	Workflow Workflow `json:"workflow"`
+	Workflow WorkflowDetail `json:"workflow"`
 }
 
-type ListWorkflowsReq {
-	Page     int `form:"page,optional,default=1"`
-	PageSize int `form:"page_size,optional,default=20"`
-}
-
-type ListWorkflowsResp {
-	Total     int64      `json:"total"`
-	Workflows []Workflow `json:"workflows"`
-}
-
+// Update workflow (save definition)
 type UpdateWorkflowReq {
-	Id          int64  `path:"id"`
-	Name        string `json:"name,optional"`
-	Description string `json:"description,optional"`
+	Id              int64       `path:"id"`
+	Name            string      `json:"name,optional"`
+	Description     string      `json:"description,optional"`
+	Nodes           []Node      `json:"nodes,optional"`
+	Edges           []Edge      `json:"edges,optional"`
+	EntryNodeId     string      `json:"entry_node_id,optional"`
+	VariablesSchema string      `json:"variables_schema,optional"`
+	CanvasMeta      *CanvasMeta `json:"canvas_meta,optional"`
+	Version         int         `json:"version"` // For optimistic concurrency
 }
 
-type UpdateWorkflowResp {}
+type UpdateWorkflowResp {
+	Version int `json:"version"`
+}
 
+// Delete workflow (draft only)
 type DeleteWorkflowReq {
 	Id int64 `path:"id"`
 }
 
 type DeleteWorkflowResp {}
+
+// Validate workflow structure
+type ValidateWorkflowReq {
+	Id int64 `path:"id"`
+}
+
+type ValidationError {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+	NodeId  string `json:"node_id,optional"`
+	EdgeId  string `json:"edge_id,optional"`
+}
+
+type ValidateWorkflowResp {
+	Valid  bool              `json:"valid"`
+	Errors []ValidationError `json:"errors"`
+}
+
+// Enable workflow (draft -> enabled)
+type EnableWorkflowReq {
+	Id int64 `path:"id"`
+}
+
+type EnableWorkflowResp {
+	Status  string `json:"status"`
+	Version int    `json:"version"`
+}
+
+// Disable workflow (enabled -> disabled)
+type DisableWorkflowReq {
+	Id int64 `path:"id"`
+}
+
+type DisableWorkflowResp {
+	Status string `json:"status"`
+}
 
 @server (
 	prefix: /api/v1
@@ -82,16 +190,28 @@ service workflow-api {
 	@handler CreateWorkflowHandler
 	post /workflows (CreateWorkflowReq) returns (CreateWorkflowResp)
 
-	@doc "Get workflow by ID"
+	@doc "Get workflow by ID including nodes/edges"
 	@handler GetWorkflowHandler
 	get /workflows/:id (GetWorkflowReq) returns (GetWorkflowResp)
 
-	@doc "Update workflow"
+	@doc "Update/save workflow definition"
 	@handler UpdateWorkflowHandler
 	put /workflows/:id (UpdateWorkflowReq) returns (UpdateWorkflowResp)
 
-	@doc "Delete workflow"
+	@doc "Delete workflow (draft only)"
 	@handler DeleteWorkflowHandler
 	delete /workflows/:id (DeleteWorkflowReq) returns (DeleteWorkflowResp)
+
+	@doc "Validate workflow structure"
+	@handler ValidateWorkflowHandler
+	post /workflows/:id/validate (ValidateWorkflowReq) returns (ValidateWorkflowResp)
+
+	@doc "Enable workflow (draft -> enabled)"
+	@handler EnableWorkflowHandler
+	post /workflows/:id/enable (EnableWorkflowReq) returns (EnableWorkflowResp)
+
+	@doc "Disable workflow (enabled -> disabled)"
+	@handler DisableWorkflowHandler
+	post /workflows/:id/disable (DisableWorkflowReq) returns (DisableWorkflowResp)
 }
 
