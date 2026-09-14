@@ -1,0 +1,97 @@
+syntax = "v1"
+
+info (
+	title:   "Octopus Workflow API"
+	desc:    "Universal Workflow Platform API"
+	author:  "Octopus Team"
+	version: "v1.0.0"
+)
+
+// Health check
+type HealthReq {}
+
+type HealthResp {
+	Status  string `json:"status"`
+	Version string `json:"version"`
+}
+
+// Workflow types
+type Workflow {
+	Id          int64  `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description,optional"`
+	Status      int    `json:"status"`
+	CreatedAt   string `json:"created_at"`
+	UpdatedAt   string `json:"updated_at"`
+}
+
+type CreateWorkflowReq {
+	Name        string `json:"name"`
+	Description string `json:"description,optional"`
+}
+
+type CreateWorkflowResp {
+	Id int64 `json:"id"`
+}
+
+type GetWorkflowReq {
+	Id int64 `path:"id"`
+}
+
+type GetWorkflowResp {
+	Workflow Workflow `json:"workflow"`
+}
+
+type ListWorkflowsReq {
+	Page     int `form:"page,optional,default=1"`
+	PageSize int `form:"page_size,optional,default=20"`
+}
+
+type ListWorkflowsResp {
+	Total     int64      `json:"total"`
+	Workflows []Workflow `json:"workflows"`
+}
+
+type UpdateWorkflowReq {
+	Id          int64  `path:"id"`
+	Name        string `json:"name,optional"`
+	Description string `json:"description,optional"`
+}
+
+type UpdateWorkflowResp {}
+
+type DeleteWorkflowReq {
+	Id int64 `path:"id"`
+}
+
+type DeleteWorkflowResp {}
+
+@server (
+	prefix: /api/v1
+)
+service workflow-api {
+	@doc "Health check endpoint"
+	@handler HealthHandler
+	get /health (HealthReq) returns (HealthResp)
+
+	@doc "List all workflows"
+	@handler ListWorkflowsHandler
+	get /workflows (ListWorkflowsReq) returns (ListWorkflowsResp)
+
+	@doc "Create a new workflow"
+	@handler CreateWorkflowHandler
+	post /workflows (CreateWorkflowReq) returns (CreateWorkflowResp)
+
+	@doc "Get workflow by ID"
+	@handler GetWorkflowHandler
+	get /workflows/:id (GetWorkflowReq) returns (GetWorkflowResp)
+
+	@doc "Update workflow"
+	@handler UpdateWorkflowHandler
+	put /workflows/:id (UpdateWorkflowReq) returns (UpdateWorkflowResp)
+
+	@doc "Delete workflow"
+	@handler DeleteWorkflowHandler
+	delete /workflows/:id (DeleteWorkflowReq) returns (DeleteWorkflowResp)
+}
+
