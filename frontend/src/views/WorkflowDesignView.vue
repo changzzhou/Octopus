@@ -285,6 +285,9 @@ onBeforeUnmount(() => {
 .page-content {
   flex: 1;
   overflow: hidden;
+  /* WorkflowDesigner needs parent to be flex to inherit height correctly */
+  display: flex;
+  flex-direction: column;
 }
 
 .loading-state,

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, markRaw, nextTick, computed } from 'vue'
+import { ref, markRaw, computed, type ComponentPublicInstance } from 'vue'
 import { VueFlow, type NodeMouseEvent, type VueFlowStore } from '@vue-flow/core'
 import { Controls } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
@@ -51,35 +51,42 @@ const nodeTypes: Record<string, any> = {
 const selectedNode = ref<any>(null)
 const isDirty = ref(false)
 const saving = ref(false)
+const isFlowReady = ref(false)
 
 const flowId = `workflow-${props.workflowId}`
 
-// Use a single modelValue array that contains both nodes and edges
-const elements = ref<any[]>([])
-
-const nodeCount = computed(() => elements.value.filter(el => !el.source).length)
-
+// Store the VueFlow instance received from @init event
 const vfInstance = ref<VueFlowStore | null>(null)
 
-function onInit(instance: VueFlowStore) {
-  vfInstance.value = instance
-}
+// Ref to VueFlow component for getBoundingClientRect
+const vueFlowRef = ref<ComponentPublicInstance | null>(null)
 
-onMounted(async () => {
-  await nextTick()
-  
-  const initialElements: any[] = []
-  
-  if (props.initialNodes?.length) {
-    initialElements.push(...props.initialNodes.map(fromBeNode))
-  }
-  
-  if (props.initialEdges?.length) {
-    initialElements.push(...props.initialEdges.map(fromBeEdge))
-  }
-  
-  elements.value = initialElements
+// Compute initial nodes/edges from props  
+const initialVfNodes = computed(() => 
+  props.initialNodes?.length 
+    ? props.initialNodes.map(fromBeNode) 
+    : []
+)
+
+const initialVfEdges = computed(() =>
+  props.initialEdges?.length 
+    ? props.initialEdges.map(fromBeEdge) 
+    : []
+)
+
+const nodeCount = computed(() => {
+  if (!vfInstance.value) return 0
+  // getNodes is a computed ref in VueFlow store
+  const nodesRef = vfInstance.value.getNodes as any
+  const nodes = nodesRef?.value ?? nodesRef
+  return Array.isArray(nodes) ? nodes.length : 0
 })
+
+// Handle VueFlow init event - receive the store instance
+function handleInit(instance: VueFlowStore) {
+  vfInstance.value = instance
+  isFlowReady.value = true
+}
 
 function markDirty() {
   isDirty.value = true
@@ -87,6 +94,8 @@ function markDirty() {
 }
 
 function handleConnect(connection: any) {
+  if (!vfInstance.value || !isFlowReady.value) return
+  
   const outlet: EdgeOutlet = connection.sourceHandle === 'failure' ? 'failure' : 'success'
   
   const newEdge: any = {
@@ -107,21 +116,35 @@ function handleConnect(connection: any) {
     labelBgPadding: [4, 4] as [number, number],
   }
   
-  elements.value = [...elements.value, newEdge]
+  vfInstance.value.addEdges([newEdge])
   markDirty()
 }
 
+function onDragOver(event: DragEvent) {
+  event.preventDefault()
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = 'move'
+  }
+}
+
 function onDrop(event: DragEvent) {
+  event.preventDefault()
+  
+  if (!vfInstance.value || !isFlowReady.value) return
+  
   const type = event.dataTransfer?.getData('application/vueflow-nodetype') as NodeType
   if (!type) return
   
-  event.preventDefault()
+  // Get VueFlow element bounds
+  const el = vueFlowRef.value?.$el as HTMLElement | undefined
+  if (!el) return
   
-  if (!vfInstance.value) return
+  const bounds = el.getBoundingClientRect()
   
+  // Convert screen coordinates to flow coordinates
   const position = vfInstance.value.screenToFlowCoordinate({
-    x: event.clientX,
-    y: event.clientY,
+    x: event.clientX - bounds.left,
+    y: event.clientY - bounds.top,
   })
   
   const config = NODE_TYPE_CONFIGS[type]
@@ -138,15 +161,8 @@ function onDrop(event: DragEvent) {
     },
   }
   
-  elements.value = [...elements.value, newNode]
+  vfInstance.value.addNodes([newNode])
   markDirty()
-}
-
-function onDragOver(event: DragEvent) {
-  event.preventDefault()
-  if (event.dataTransfer) {
-    event.dataTransfer.dropEffect = 'move'
-  }
 }
 
 function onNodeClick(event: NodeMouseEvent) {
@@ -162,14 +178,18 @@ function onNodeDragStop() {
 }
 
 function updateNodeData(nodeId: string, data: WorkflowNodeData) {
-  const nodeIndex = elements.value.findIndex(n => n.id === nodeId && !n.source)
+  if (!vfInstance.value) return
+  
+  const nodesRef = vfInstance.value.getNodes as any
+  const nodes = nodesRef?.value ?? nodesRef
+  if (!Array.isArray(nodes)) return
+  
+  const nodeIndex = nodes.findIndex((n: any) => n.id === nodeId)
   if (nodeIndex !== -1) {
-    const updatedElements = [...elements.value]
-    updatedElements[nodeIndex] = {
-      ...updatedElements[nodeIndex],
-      data,
-    }
-    elements.value = updatedElements
+    const updatedNodes = nodes.map((n: any) => 
+      n.id === nodeId ? { ...n, data } : n
+    )
+    vfInstance.value.setNodes(updatedNodes)
     
     if (selectedNode.value?.id === nodeId) {
       selectedNode.value = { ...selectedNode.value, data }
@@ -179,15 +199,8 @@ function updateNodeData(nodeId: string, data: WorkflowNodeData) {
 }
 
 function deleteNode(nodeId: string) {
-  elements.value = elements.value.filter(el => {
-    if (el.source) {
-      // This is an edge - remove if connected to deleted node
-      return el.source !== nodeId && el.target !== nodeId
-    } else {
-      // This is a node - remove if it's the deleted node
-      return el.id !== nodeId
-    }
-  })
+  if (!vfInstance.value) return
+  vfInstance.value.removeNodes([nodeId])
   selectedNode.value = null
   markDirty()
 }
@@ -197,19 +210,23 @@ function closeSidebar() {
 }
 
 async function saveWorkflow() {
+  if (!vfInstance.value) return
+  
   saving.value = true
   try {
-    const vfNodes = elements.value.filter(el => !el.source)
-    const vfEdges = elements.value.filter(el => el.source)
+    const nodesRef = vfInstance.value.getNodes as any
+    const edgesRef = vfInstance.value.getEdges as any
+    const vfNodes = nodesRef?.value ?? nodesRef
+    const vfEdges = edgesRef?.value ?? edgesRef
     
-    const beNodes: Node[] = vfNodes.map((n: any) => toBeNode({
+    const beNodes: Node[] = (vfNodes || []).map((n: any) => toBeNode({
       id: n.id,
       type: n.type || 'script',
       position: n.position,
       data: n.data as WorkflowNodeData,
     }))
     
-    const beEdges: Edge[] = vfEdges.map((e: any) => toBeEdge({
+    const beEdges: Edge[] = (vfEdges || []).map((e: any) => toBeEdge({
       id: e.id,
       source: e.source,
       target: e.target,
@@ -217,14 +234,11 @@ async function saveWorkflow() {
       data: e.data,
     }))
     
-    let canvasMeta: CanvasMeta | undefined
-    if (vfInstance.value) {
-      const viewport = vfInstance.value.getViewport()
-      canvasMeta = {
-        viewport_x: viewport.x,
-        viewport_y: viewport.y,
-        zoom: viewport.zoom,
-      }
+    const viewport = vfInstance.value.getViewport()
+    const canvasMeta: CanvasMeta = {
+      viewport_x: viewport.x,
+      viewport_y: viewport.y,
+      zoom: viewport.zoom,
     }
     
     emit('save', { nodes: beNodes, edges: beEdges, canvas_meta: canvasMeta })
@@ -235,16 +249,21 @@ async function saveWorkflow() {
 
 defineExpose({
   getCanvas: () => {
-    const vfNodes = elements.value.filter(el => !el.source)
-    const vfEdges = elements.value.filter(el => el.source)
+    if (!vfInstance.value) return { nodes: [], edges: [] }
+    
+    const nodesRef = vfInstance.value.getNodes as any
+    const edgesRef = vfInstance.value.getEdges as any
+    const vfNodes = nodesRef?.value ?? nodesRef
+    const vfEdges = edgesRef?.value ?? edgesRef
+    
     return {
-      nodes: vfNodes.map((n: any) => toBeNode({
+      nodes: (vfNodes || []).map((n: any) => toBeNode({
         id: n.id,
         type: n.type || 'script',
         position: n.position,
         data: n.data as WorkflowNodeData,
       })),
-      edges: vfEdges.map((e: any) => toBeEdge({
+      edges: (vfEdges || []).map((e: any) => toBeEdge({
         id: e.id,
         source: e.source,
         target: e.target,
@@ -281,33 +300,44 @@ defineExpose({
     <div class="designer-content">
       <NodePalette class="designer-palette" />
       
+      <!-- Drop zone wrapper -->
       <div 
         class="designer-canvas"
-        @drop="onDrop"
-        @dragover="onDragOver"
+        @drop.capture="onDrop"
+        @dragover.capture="onDragOver"
       >
+        <!-- VueFlow provides nodes/edges -->
         <VueFlow
+          ref="vueFlowRef"
           :id="flowId"
-          v-model="elements"
+          :nodes="initialVfNodes"
+          :edges="initialVfEdges"
           :node-types="nodeTypes"
           :default-viewport="{ zoom: 1, x: 100, y: 100 }"
           :min-zoom="0.25"
           :max-zoom="2"
+          @drop="onDrop"
+          @dragover="onDragOver"
           @node-click="onNodeClick"
           @pane-click="onPaneClick"
           @node-drag-stop="onNodeDragStop"
           @connect="handleConnect"
-          @vue-flow-init="onInit"
+          @init="handleInit"
         >
           <Background :variant="BackgroundVariant.Dots" :gap="20" :size="1" />
           <Controls position="bottom-left" />
           <MiniMap position="bottom-right" />
         </VueFlow>
         
-        <div v-if="nodeCount === 0" class="empty-canvas">
+        <div v-if="nodeCount === 0 && isFlowReady" class="empty-canvas">
           <div class="empty-icon">🎨</div>
           <p class="empty-title">Start Building Your Workflow</p>
           <p class="empty-hint">Drag nodes from the palette to get started</p>
+        </div>
+        
+        <div v-if="!isFlowReady" class="loading-canvas">
+          <div class="spinner"></div>
+          <p>Initializing canvas...</p>
         </div>
       </div>
       
@@ -333,7 +363,9 @@ defineExpose({
 .workflow-designer {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  /* Use flex: 1 to properly fill parent flex container */
+  flex: 1;
+  min-height: 0; /* Allow flex shrinking */
   background: #f1f5f9;
 }
 
@@ -412,6 +444,7 @@ defineExpose({
   gap: 16px;
   padding: 16px;
   overflow: hidden;
+  min-height: 0; /* Allow flex shrinking */
 }
 
 .designer-palette {
@@ -425,13 +458,22 @@ defineExpose({
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
   position: relative;
   overflow: hidden;
+  min-height: 0; /* Allow flex shrinking */
+  min-width: 0; /* Allow flex shrinking */
+}
+
+/* Ensure VueFlow fills its container */
+.designer-canvas :deep(.vue-flow) {
+  position: absolute !important;
+  inset: 0 !important;
 }
 
 .designer-sidebar {
   flex-shrink: 0;
 }
 
-.empty-canvas {
+.empty-canvas,
+.loading-canvas {
   position: absolute;
   inset: 0;
   display: flex;
@@ -458,6 +500,24 @@ defineExpose({
   font-size: 14px;
   color: #6b7280;
   margin: 0;
+}
+
+.loading-canvas {
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #e2e8f0;
+  border-top-color: #7c3aed;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 12px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 :deep(.vue-flow__minimap) {
