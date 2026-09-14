@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, markRaw, computed, type ComponentPublicInstance } from 'vue'
+import { ref, markRaw, type ComponentPublicInstance } from 'vue'
 import { VueFlow, type NodeMouseEvent, type VueFlowStore } from '@vue-flow/core'
 import { Controls } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
@@ -61,30 +61,34 @@ const vfInstance = ref<VueFlowStore | null>(null)
 // Ref to VueFlow component for getBoundingClientRect
 const vueFlowRef = ref<ComponentPublicInstance | null>(null)
 
-// Compute initial nodes/edges from props  
-const initialVfNodes = computed(() => 
-  props.initialNodes?.length 
-    ? props.initialNodes.map(fromBeNode) 
-    : []
-)
+// Track node count for empty state display (updated after addNodes)
+const nodeCount = ref(0)
 
-const initialVfEdges = computed(() =>
-  props.initialEdges?.length 
-    ? props.initialEdges.map(fromBeEdge) 
-    : []
-)
-
-const nodeCount = computed(() => {
-  if (!vfInstance.value) return 0
-  // getNodes is a computed ref in VueFlow store
+function updateNodeCount() {
+  if (!vfInstance.value) {
+    nodeCount.value = 0
+    return
+  }
   const nodesRef = vfInstance.value.getNodes as any
   const nodes = nodesRef?.value ?? nodesRef
-  return Array.isArray(nodes) ? nodes.length : 0
-})
+  nodeCount.value = Array.isArray(nodes) ? nodes.length : 0
+}
 
 // Handle VueFlow init event - receive the store instance
 function handleInit(instance: VueFlowStore) {
   vfInstance.value = instance
+  
+  // Load initial nodes/edges into the instance (NOT via props binding)
+  if (props.initialNodes?.length) {
+    const vfNodes = props.initialNodes.map(fromBeNode)
+    instance.setNodes(vfNodes)
+  }
+  if (props.initialEdges?.length) {
+    const vfEdges = props.initialEdges.map(fromBeEdge)
+    instance.setEdges(vfEdges)
+  }
+  
+  updateNodeCount()
   isFlowReady.value = true
 }
 
@@ -121,6 +125,7 @@ function handleConnect(connection: any) {
 }
 
 function onDragOver(event: DragEvent) {
+  event.stopPropagation()
   event.preventDefault()
   if (event.dataTransfer) {
     event.dataTransfer.dropEffect = 'move'
@@ -129,6 +134,7 @@ function onDragOver(event: DragEvent) {
 
 function onDrop(event: DragEvent) {
   event.preventDefault()
+  event.stopPropagation()
   
   if (!vfInstance.value || !isFlowReady.value) return
   
@@ -162,6 +168,7 @@ function onDrop(event: DragEvent) {
   }
   
   vfInstance.value.addNodes([newNode])
+  updateNodeCount()
   markDirty()
 }
 
@@ -201,6 +208,7 @@ function updateNodeData(nodeId: string, data: WorkflowNodeData) {
 function deleteNode(nodeId: string) {
   if (!vfInstance.value) return
   vfInstance.value.removeNodes([nodeId])
+  updateNodeCount()
   selectedNode.value = null
   markDirty()
 }
@@ -306,12 +314,10 @@ defineExpose({
         @drop.capture="onDrop"
         @dragover.capture="onDragOver"
       >
-        <!-- VueFlow provides nodes/edges -->
+        <!-- VueFlow - NO controlled :nodes/:edges binding, use instance methods only -->
         <VueFlow
           ref="vueFlowRef"
           :id="flowId"
-          :nodes="initialVfNodes"
-          :edges="initialVfEdges"
           :node-types="nodeTypes"
           :default-viewport="{ zoom: 1, x: 100, y: 100 }"
           :min-zoom="0.25"
