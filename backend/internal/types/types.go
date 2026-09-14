@@ -3,13 +3,26 @@
 
 package types
 
+type CanvasMeta struct {
+	ViewportX float64 `json:"viewport_x,optional"`
+	ViewportY float64 `json:"viewport_y,optional"`
+	Zoom      float64 `json:"zoom,optional"`
+}
+
 type CreateWorkflowReq struct {
-	Name        string `json:"name"`
-	Description string `json:"description,optional"`
+	Name            string      `json:"name"`
+	Description     string      `json:"description,optional"`
+	Nodes           []Node      `json:"nodes,optional"`
+	Edges           []Edge      `json:"edges,optional"`
+	EntryNodeId     string      `json:"entry_node_id,optional"`
+	VariablesSchema string      `json:"variables_schema,optional"`
+	CanvasMeta      *CanvasMeta `json:"canvas_meta,optional"`
 }
 
 type CreateWorkflowResp struct {
-	Id int64 `json:"id"`
+	Id      int64  `json:"id"`
+	Version int    `json:"version"`
+	Status  string `json:"status"`
 }
 
 type DeleteWorkflowReq struct {
@@ -19,12 +32,53 @@ type DeleteWorkflowReq struct {
 type DeleteWorkflowResp struct {
 }
 
+type DisableWorkflowReq struct {
+	Id int64 `path:"id"`
+}
+
+type DisableWorkflowResp struct {
+	Status string `json:"status"`
+}
+
+type Edge struct {
+	Id     string `json:"id"`
+	Source string `json:"source"`
+	Target string `json:"target"`
+	Outlet string `json:"outlet"` // success|failure
+	Label  string `json:"label,optional"`
+}
+
+type EnableWorkflowReq struct {
+	Id int64 `path:"id"`
+}
+
+type EnableWorkflowResp struct {
+	Status  string `json:"status"`
+	Version int    `json:"version"`
+}
+
+type GetRunReq struct {
+	RunId int64 `path:"runId"`
+}
+
+type GetRunResp struct {
+	Run Run `json:"run"`
+}
+
+type GetRunStepsReq struct {
+	RunId int64 `path:"runId"`
+}
+
+type GetRunStepsResp struct {
+	Steps []Step `json:"steps"`
+}
+
 type GetWorkflowReq struct {
 	Id int64 `path:"id"`
 }
 
 type GetWorkflowResp struct {
-	Workflow Workflow `json:"workflow"`
+	Workflow WorkflowDetail `json:"workflow"`
 }
 
 type HealthReq struct {
@@ -36,29 +90,130 @@ type HealthResp struct {
 }
 
 type ListWorkflowsReq struct {
-	Page     int `form:"page,optional,default=1"`
-	PageSize int `form:"page_size,optional,default=20"`
+	Page     int    `form:"page,optional,default=1"`
+	PageSize int    `form:"page_size,optional,default=20"`
+	Status   string `form:"status,optional"` // filter by status
 }
 
 type ListWorkflowsResp struct {
-	Total     int64      `json:"total"`
-	Workflows []Workflow `json:"workflows"`
+	Total     int64             `json:"total"`
+	Workflows []WorkflowSummary `json:"workflows"`
+}
+
+type Node struct {
+	Id            string   `json:"id"`
+	Type          string   `json:"type"` // script|http|human
+	Name          string   `json:"name"`
+	Position      Position `json:"position"`
+	Config        string   `json:"config,optional"` // JSON string
+	CredentialRef string   `json:"credential_ref,optional"`
+}
+
+type Position struct {
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
+}
+
+type Run struct {
+	Id                 int64                       `json:"id"`
+	WorkflowId         int64                       `json:"workflow_id"`
+	WorkflowVersion    int                         `json:"workflow_version"`
+	DefinitionSnapshot *WorkflowDefinitionSnapshot `json:"definition_snapshot"`
+	Status             string                      `json:"status"`
+	TriggerType        string                      `json:"trigger_type"`
+	StartedAt          string                      `json:"started_at,optional"`
+	FinishedAt         string                      `json:"finished_at,optional"`
+	ErrorMessage       string                      `json:"error_message,optional"`
+	CreatedAt          string                      `json:"created_at"`
+	UpdatedAt          string                      `json:"updated_at"`
+}
+
+type Step struct {
+	Id           int64  `json:"id"`
+	RunId        int64  `json:"run_id"`
+	NodeId       string `json:"node_id"`
+	NodeType     string `json:"node_type"`
+	NodeConfig   string `json:"node_config,optional"`
+	Status       string `json:"status"`
+	InputData    string `json:"input_data,optional"`
+	OutputData   string `json:"output_data,optional"`
+	ErrorMessage string `json:"error_message,optional"`
+	StartedAt    string `json:"started_at,optional"`
+	FinishedAt   string `json:"finished_at,optional"`
+	CreatedAt    string `json:"created_at"`
+	UpdatedAt    string `json:"updated_at"`
+}
+
+type TriggerRunReq struct {
+	Id int64 `path:"id"`
+}
+
+type TriggerRunResp struct {
+	RunId int64 `json:"run_id"`
 }
 
 type UpdateWorkflowReq struct {
-	Id          int64  `path:"id"`
-	Name        string `json:"name,optional"`
-	Description string `json:"description,optional"`
+	Id              int64       `path:"id"`
+	Name            string      `json:"name,optional"`
+	Description     string      `json:"description,optional"`
+	Nodes           []Node      `json:"nodes,optional"`
+	Edges           []Edge      `json:"edges,optional"`
+	EntryNodeId     string      `json:"entry_node_id,optional"`
+	VariablesSchema string      `json:"variables_schema,optional"`
+	CanvasMeta      *CanvasMeta `json:"canvas_meta,optional"`
+	Version         int         `json:"version"` // For optimistic concurrency
 }
 
 type UpdateWorkflowResp struct {
+	Version int `json:"version"`
 }
 
-type Workflow struct {
+type ValidateWorkflowReq struct {
+	Id int64 `path:"id"`
+}
+
+type ValidateWorkflowResp struct {
+	Valid  bool              `json:"valid"`
+	Errors []ValidationError `json:"errors"`
+}
+
+type ValidationError struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+	NodeId  string `json:"node_id,optional"`
+	EdgeId  string `json:"edge_id,optional"`
+}
+
+type WorkflowDefinitionSnapshot struct {
+	Nodes           []Node `json:"nodes"`
+	Edges           []Edge `json:"edges"`
+	EntryNodeId     string `json:"entry_node_id,optional"`
+	VariablesSchema string `json:"variables_schema,optional"`
+}
+
+type WorkflowDetail struct {
+	Id              int64       `json:"id"`
+	Name            string      `json:"name"`
+	Description     string      `json:"description,optional"`
+	Status          string      `json:"status"` // draft|enabled|disabled
+	Version         int         `json:"version"`
+	Nodes           []Node      `json:"nodes"`
+	Edges           []Edge      `json:"edges"`
+	EntryNodeId     string      `json:"entry_node_id,optional"`
+	VariablesSchema string      `json:"variables_schema,optional"` // JSON string
+	CanvasMeta      *CanvasMeta `json:"canvas_meta,optional"`
+	CreatedBy       string      `json:"created_by,optional"`
+	UpdatedBy       string      `json:"updated_by,optional"`
+	CreatedAt       string      `json:"created_at"`
+	UpdatedAt       string      `json:"updated_at"`
+}
+
+type WorkflowSummary struct {
 	Id          int64  `json:"id"`
 	Name        string `json:"name"`
 	Description string `json:"description,optional"`
-	Status      int    `json:"status"`
+	Status      string `json:"status"` // draft|enabled|disabled
+	Version     int    `json:"version"`
 	CreatedAt   string `json:"created_at"`
 	UpdatedAt   string `json:"updated_at"`
 }

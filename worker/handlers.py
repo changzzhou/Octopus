@@ -39,18 +39,18 @@ def list_handlers() -> list[str]:
 def handle_noop(request: TaskRequest) -> TaskResponse:
     """No-op handler for testing."""
     logger.info(f"Executing noop task: {request.task_id}")
-    return TaskResponse.success(request.task_id, {"message": "noop completed"})
+    return TaskResponse.success(request.task_id, {"message": "noop completed"}, request.context)
 
 
 @register_handler("echo")
 def handle_echo(request: TaskRequest) -> TaskResponse:
     """Echo handler - returns the payload as result."""
     logger.info(f"Executing echo task: {request.task_id}")
-    return TaskResponse.success(request.task_id, {"echo": request.payload})
+    return TaskResponse.success(request.task_id, {"echo": request.payload}, request.context)
 
 
-@register_handler("http_request")
-def handle_http_request(request: TaskRequest) -> TaskResponse:
+@register_handler("http")
+def handle_http(request: TaskRequest) -> TaskResponse:
     """
     HTTP request handler stub.
     
@@ -64,15 +64,17 @@ def handle_http_request(request: TaskRequest) -> TaskResponse:
     
     Full implementation will be added in W-1.
     """
-    logger.info(f"Executing http_request task: {request.task_id}")
-    url = request.payload.get("url", "")
-    method = request.payload.get("method", "GET")
+    logger.info(f"Executing http task: {request.task_id}")
+    payload = request.payload or {}
+    url = payload.get("url", "") if isinstance(payload, dict) else ""
+    method = payload.get("method", "GET") if isinstance(payload, dict) else "GET"
     return TaskResponse.success(
         request.task_id,
         {
             "stub": True,
             "message": f"HTTP {method} to {url} - stub implementation",
         },
+        request.context,
     )
 
 
@@ -91,11 +93,13 @@ def handle_script(request: TaskRequest) -> TaskResponse:
     Full implementation will be added in W-1.
     """
     logger.info(f"Executing script task: {request.task_id}")
-    language = request.payload.get("language", "python")
+    payload = request.payload or {}
+    language = payload.get("language", "python") if isinstance(payload, dict) else "python"
     return TaskResponse.success(
         request.task_id,
         {
             "stub": True,
             "message": f"Script ({language}) execution - stub implementation",
         },
+        request.context,
     )

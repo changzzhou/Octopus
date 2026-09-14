@@ -21,6 +21,18 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Handler: HealthHandler(serverCtx),
 			},
 			{
+				// Get run details
+				Method:  http.MethodGet,
+				Path:    "/runs/:runId",
+				Handler: GetRunHandler(serverCtx),
+			},
+			{
+				// Get run steps
+				Method:  http.MethodGet,
+				Path:    "/runs/:runId/steps",
+				Handler: GetRunStepsHandler(serverCtx),
+			},
+			{
 				// List all workflows
 				Method:  http.MethodGet,
 				Path:    "/workflows",
@@ -33,22 +45,46 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Handler: CreateWorkflowHandler(serverCtx),
 			},
 			{
-				// Get workflow by ID
+				// Get workflow by ID including nodes/edges
 				Method:  http.MethodGet,
 				Path:    "/workflows/:id",
 				Handler: GetWorkflowHandler(serverCtx),
 			},
 			{
-				// Update workflow
+				// Update/save workflow definition
 				Method:  http.MethodPut,
 				Path:    "/workflows/:id",
 				Handler: UpdateWorkflowHandler(serverCtx),
 			},
 			{
-				// Delete workflow
+				// Delete workflow (draft only)
 				Method:  http.MethodDelete,
 				Path:    "/workflows/:id",
 				Handler: DeleteWorkflowHandler(serverCtx),
+			},
+			{
+				// Disable workflow (enabled -> disabled)
+				Method:  http.MethodPost,
+				Path:    "/workflows/:id/disable",
+				Handler: DisableWorkflowHandler(serverCtx),
+			},
+			{
+				// Enable workflow (draft|disabled -> enabled)
+				Method:  http.MethodPost,
+				Path:    "/workflows/:id/enable",
+				Handler: EnableWorkflowHandler(serverCtx),
+			},
+			{
+				// Trigger a workflow run (draft allowed)
+				Method:  http.MethodPost,
+				Path:    "/workflows/:id/runs",
+				Handler: TriggerRunHandler(serverCtx),
+			},
+			{
+				// Validate workflow structure
+				Method:  http.MethodPost,
+				Path:    "/workflows/:id/validate",
+				Handler: ValidateWorkflowHandler(serverCtx),
 			},
 		},
 		rest.WithPrefix("/api/v1"),
