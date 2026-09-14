@@ -237,6 +237,11 @@ type GetRunStepsResp {
 	Steps []Step `json:"steps"`
 }
 
+// SSE Events (BE-3)
+type GetRunEventsReq {
+	RunId int64 `path:"runId"`
+}
+
 @server (
 	prefix: /api/v1
 )
@@ -288,5 +293,9 @@ service workflow-api {
 	@doc "Get run steps"
 	@handler GetRunStepsHandler
 	get /runs/:runId/steps (GetRunStepsReq) returns (GetRunStepsResp)
+
+	@doc "SSE stream for run events"
+	@handler GetRunEventsHandler
+	get /runs/:runId/events (GetRunEventsReq)
 }
 

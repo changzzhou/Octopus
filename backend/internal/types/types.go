@@ -57,6 +57,10 @@ type EnableWorkflowResp struct {
 	Version int    `json:"version"`
 }
 
+type GetRunEventsReq struct {
+	RunId int64 `path:"runId"`
+}
+
 type GetRunReq struct {
 	RunId int64 `path:"runId"`
 }
