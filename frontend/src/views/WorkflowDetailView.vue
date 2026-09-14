@@ -65,8 +65,8 @@ onMounted(async () => {
             </div>
             <div class="bg-slate-50 dark:bg-slate-700 rounded-lg p-4">
               <div class="text-slate-500 dark:text-slate-400">Status</div>
-              <div class="font-medium text-slate-900 dark:text-white">
-                {{ workflow.status === 0 ? 'Draft' : 'Active' }}
+              <div class="font-medium text-slate-900 dark:text-white capitalize">
+                {{ workflow.status }}
               </div>
             </div>
             <div class="bg-slate-50 dark:bg-slate-700 rounded-lg p-4">

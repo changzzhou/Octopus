@@ -18,6 +18,16 @@ const router = createRouter({
       name: 'workflow-detail',
       component: () => import('../views/WorkflowDetailView.vue'),
     },
+    {
+      path: '/workflows/:id/design',
+      name: 'workflow-design',
+      component: () => import('../views/WorkflowDesignView.vue'),
+    },
+    {
+      path: '/workflows/:id/executions/:executionId',
+      name: 'workflow-execution',
+      component: () => import('../views/WorkflowExecutionView.vue'),
+    },
   ],
 })
 
