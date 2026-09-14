@@ -41,4 +41,45 @@ CREATE TABLE IF NOT EXISTS `workflows` (
 --   "label": "optional label"
 -- }
 
-SELECT 'Octopus database initialized with workflows table' AS message;
+-- Workflow runs table (BE-2)
+CREATE TABLE IF NOT EXISTS `workflow_runs` (
+    `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `workflow_id` BIGINT UNSIGNED NOT NULL,
+    `workflow_version` INT UNSIGNED NOT NULL COMMENT 'Version of workflow at run time',
+    `definition_snapshot` JSON NOT NULL COMMENT 'Frozen workflow definition',
+    `status` VARCHAR(32) NOT NULL DEFAULT 'pending' COMMENT 'pending|running|succeeded|failed|cancelled',
+    `trigger_type` VARCHAR(32) NOT NULL DEFAULT 'manual' COMMENT 'manual|schedule|webhook',
+    `started_at` TIMESTAMP NULL,
+    `finished_at` TIMESTAMP NULL,
+    `error_message` TEXT,
+    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    INDEX `idx_workflow_id` (`workflow_id`),
+    INDEX `idx_status` (`status`),
+    INDEX `idx_created_at` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Workflow run steps table (BE-2)
+CREATE TABLE IF NOT EXISTS `workflow_run_steps` (
+    `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `run_id` BIGINT UNSIGNED NOT NULL,
+    `node_id` VARCHAR(64) NOT NULL COMMENT 'Node ID from definition',
+    `node_type` VARCHAR(32) NOT NULL COMMENT 'script|http|human|etc',
+    `node_config` JSON COMMENT 'Node configuration snapshot',
+    `status` VARCHAR(32) NOT NULL DEFAULT 'pending' COMMENT 'pending|running|succeeded|failed|waiting_human|skipped',
+    `input_data` JSON COMMENT 'Input data for this step',
+    `output_data` JSON COMMENT 'Output data from this step',
+    `error_message` TEXT,
+    `started_at` TIMESTAMP NULL,
+    `finished_at` TIMESTAMP NULL,
+    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    INDEX `idx_run_id` (`run_id`),
+    INDEX `idx_node_id` (`node_id`),
+    INDEX `idx_status` (`status`),
+    UNIQUE KEY `uk_run_node` (`run_id`, `node_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+SELECT 'Octopus database initialized with workflows, workflow_runs, workflow_run_steps tables' AS message;

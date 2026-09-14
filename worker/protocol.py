@@ -96,36 +96,40 @@ class TaskResponse:
     """
     task_id: str
     status: TaskStatus
+    context: TaskContext | None = None
     result: dict[str, Any] | None = None
     error: str | None = None
     completed_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
     
     def to_dict(self) -> dict[str, Any]:
-        return {
+        d = {
             "task_id": self.task_id,
             "status": self.status.value,
             "result": self.result,
             "error": self.error,
             "completed_at": self.completed_at,
         }
+        if self.context:
+            d["context"] = self.context.to_dict()
+        return d
     
     def to_json(self) -> str:
         return json.dumps(self.to_dict())
     
     @classmethod
-    def success(cls, task_id: str, result: dict[str, Any] | None = None) -> "TaskResponse":
+    def success(cls, task_id: str, result: dict[str, Any] | None = None, context: TaskContext | None = None) -> "TaskResponse":
         """Create a successful task response."""
-        return cls(task_id=task_id, status=TaskStatus.SUCCESS, result=result)
+        return cls(task_id=task_id, status=TaskStatus.SUCCESS, result=result, context=context)
     
     @classmethod
-    def failure(cls, task_id: str, error: str) -> "TaskResponse":
+    def failure(cls, task_id: str, error: str, context: TaskContext | None = None) -> "TaskResponse":
         """Create a failed task response."""
-        return cls(task_id=task_id, status=TaskStatus.FAILURE, error=error)
+        return cls(task_id=task_id, status=TaskStatus.FAILURE, error=error, context=context)
     
     @classmethod
-    def pending(cls, task_id: str) -> "TaskResponse":
+    def pending(cls, task_id: str, context: TaskContext | None = None) -> "TaskResponse":
         """Create a pending task response (for async tasks)."""
-        return cls(task_id=task_id, status=TaskStatus.PENDING)
+        return cls(task_id=task_id, status=TaskStatus.PENDING, context=context)
 
 
 def create_task_request(

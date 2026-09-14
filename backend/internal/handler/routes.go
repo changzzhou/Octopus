@@ -21,6 +21,18 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Handler: HealthHandler(serverCtx),
 			},
 			{
+				// Get run details
+				Method:  http.MethodGet,
+				Path:    "/runs/:runId",
+				Handler: GetRunHandler(serverCtx),
+			},
+			{
+				// Get run steps
+				Method:  http.MethodGet,
+				Path:    "/runs/:runId/steps",
+				Handler: GetRunStepsHandler(serverCtx),
+			},
+			{
 				// List all workflows
 				Method:  http.MethodGet,
 				Path:    "/workflows",
@@ -61,6 +73,12 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Method:  http.MethodPost,
 				Path:    "/workflows/:id/enable",
 				Handler: EnableWorkflowHandler(serverCtx),
+			},
+			{
+				// Trigger a workflow run (draft allowed)
+				Method:  http.MethodPost,
+				Path:    "/workflows/:id/runs",
+				Handler: TriggerRunHandler(serverCtx),
 			},
 			{
 				// Validate workflow structure

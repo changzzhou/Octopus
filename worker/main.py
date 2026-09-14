@@ -69,6 +69,7 @@ class Worker:
             return TaskResponse.failure(
                 request.task_id,
                 f"Unknown task type: {request.task_type}",
+                request.context,
             )
         
         try:
@@ -77,7 +78,7 @@ class Worker:
             return response
         except Exception as e:
             logger.exception(f"Task {request.task_id} failed with error: {e}")
-            return TaskResponse.failure(request.task_id, str(e))
+            return TaskResponse.failure(request.task_id, str(e), request.context)
     
     async def run(self) -> NoReturn:
         """Main worker loop."""

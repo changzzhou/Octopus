@@ -174,6 +174,69 @@ type DisableWorkflowResp {
 	Status string `json:"status"`
 }
 
+// Run types (BE-2)
+type TriggerRunReq {
+	Id int64 `path:"id"`
+}
+
+type TriggerRunResp {
+	RunId int64 `json:"run_id"`
+}
+
+type GetRunReq {
+	RunId int64 `path:"runId"`
+}
+
+// WorkflowDefinitionSnapshot for frozen run definition
+type WorkflowDefinitionSnapshot {
+	Nodes           []Node `json:"nodes"`
+	Edges           []Edge `json:"edges"`
+	EntryNodeId     string `json:"entry_node_id,optional"`
+	VariablesSchema string `json:"variables_schema,optional"`
+}
+
+type Run {
+	Id                 int64                       `json:"id"`
+	WorkflowId         int64                       `json:"workflow_id"`
+	WorkflowVersion    int                         `json:"workflow_version"`
+	DefinitionSnapshot *WorkflowDefinitionSnapshot `json:"definition_snapshot"`
+	Status             string                      `json:"status"`
+	TriggerType        string                      `json:"trigger_type"`
+	StartedAt          string                      `json:"started_at,optional"`
+	FinishedAt         string                      `json:"finished_at,optional"`
+	ErrorMessage       string                      `json:"error_message,optional"`
+	CreatedAt          string                      `json:"created_at"`
+	UpdatedAt          string                      `json:"updated_at"`
+}
+
+type GetRunResp {
+	Run Run `json:"run"`
+}
+
+type GetRunStepsReq {
+	RunId int64 `path:"runId"`
+}
+
+type Step {
+	Id           int64  `json:"id"`
+	RunId        int64  `json:"run_id"`
+	NodeId       string `json:"node_id"`
+	NodeType     string `json:"node_type"`
+	NodeConfig   string `json:"node_config,optional"`
+	Status       string `json:"status"`
+	InputData    string `json:"input_data,optional"`
+	OutputData   string `json:"output_data,optional"`
+	ErrorMessage string `json:"error_message,optional"`
+	StartedAt    string `json:"started_at,optional"`
+	FinishedAt   string `json:"finished_at,optional"`
+	CreatedAt    string `json:"created_at"`
+	UpdatedAt    string `json:"updated_at"`
+}
+
+type GetRunStepsResp {
+	Steps []Step `json:"steps"`
+}
+
 @server (
 	prefix: /api/v1
 )
@@ -213,5 +276,17 @@ service workflow-api {
 	@doc "Disable workflow (enabled -> disabled)"
 	@handler DisableWorkflowHandler
 	post /workflows/:id/disable (DisableWorkflowReq) returns (DisableWorkflowResp)
+
+	@doc "Trigger a workflow run (draft allowed)"
+	@handler TriggerRunHandler
+	post /workflows/:id/runs (TriggerRunReq) returns (TriggerRunResp)
+
+	@doc "Get run details"
+	@handler GetRunHandler
+	get /runs/:runId (GetRunReq) returns (GetRunResp)
+
+	@doc "Get run steps"
+	@handler GetRunStepsHandler
+	get /runs/:runId/steps (GetRunStepsReq) returns (GetRunStepsResp)
 }
 

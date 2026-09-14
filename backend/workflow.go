@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"net/http"
@@ -39,8 +40,12 @@ func main() {
 		}
 	})
 
-	ctx := svc.NewServiceContext(c)
-	handler.RegisterHandlers(server, ctx)
+	svcCtx := svc.NewServiceContext(c)
+	handler.RegisterHandlers(server, svcCtx)
+
+	ctx := context.Background()
+	svcCtx.ResultPoller.Start(ctx)
+	defer svcCtx.ResultPoller.Stop()
 
 	fmt.Printf("Starting server at %s:%d...\n", c.Host, c.Port)
 	server.Start()
