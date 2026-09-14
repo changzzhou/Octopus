@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { listWorkflows, createWorkflow, type Workflow } from '../api/workflows'
+import { listWorkflows, createWorkflow, type Workflow, type WorkflowStatus } from '../api/workflows'
 
 const router = useRouter()
 const workflows = ref<Workflow[]>([])
@@ -15,14 +15,14 @@ const newWorkflowDescription = ref('')
 const creating = ref(false)
 const createError = ref<string | null>(null)
 
-const statusLabels: Record<number, { text: string; class: string }> = {
-  0: { text: 'draft', class: 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300' },
-  1: { text: 'enabled', class: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' },
-  2: { text: 'disabled', class: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300' },
+const statusStyles: Record<WorkflowStatus, string> = {
+  draft: 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300',
+  enabled: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
+  disabled: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
 }
 
-function getStatusLabel(status: number) {
-  return statusLabels[status] || statusLabels[0]
+function getStatusStyle(status: WorkflowStatus): string {
+  return statusStyles[status] || statusStyles.draft
 }
 
 function formatUpdatedTime(dateStr: string) {
@@ -170,9 +170,9 @@ onMounted(loadWorkflows)
               </td>
               <td class="px-6 py-4">
                 <span 
-                  :class="[getStatusLabel(workflow.status).class, 'px-2 py-1 rounded-full text-xs font-medium']"
+                  :class="[getStatusStyle(workflow.status), 'px-2 py-1 rounded-full text-xs font-medium']"
                 >
-                  {{ getStatusLabel(workflow.status).text }}
+                  {{ workflow.status }}
                 </span>
               </td>
               <td class="px-6 py-4 text-sm text-slate-500 dark:text-slate-400">

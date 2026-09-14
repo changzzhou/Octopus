@@ -12,11 +12,13 @@ function isMockEnabled(): boolean {
   return import.meta.env.VITE_MOCK_API === 'true'
 }
 
+export type WorkflowStatus = 'draft' | 'enabled' | 'disabled'
+
 export interface Workflow {
   id: number
   name: string
   description?: string
-  status: number
+  status: WorkflowStatus
   created_at: string
   updated_at: string
 }
@@ -31,7 +33,7 @@ const mockWorkflows: Workflow[] = [
     id: 1,
     name: 'Data Pipeline',
     description: 'ETL workflow for daily data processing',
-    status: 1,
+    status: 'enabled',
     created_at: '2026-09-01T10:00:00Z',
     updated_at: '2026-09-14T08:30:00Z',
   },
@@ -39,7 +41,7 @@ const mockWorkflows: Workflow[] = [
     id: 2,
     name: 'User Onboarding',
     description: 'Automated user welcome and setup flow',
-    status: 0,
+    status: 'draft',
     created_at: '2026-09-05T14:00:00Z',
     updated_at: '2026-09-13T16:45:00Z',
   },
@@ -47,7 +49,7 @@ const mockWorkflows: Workflow[] = [
     id: 3,
     name: 'Report Generation',
     description: 'Weekly sales report automation',
-    status: 2,
+    status: 'disabled',
     created_at: '2026-09-08T09:00:00Z',
     updated_at: '2026-09-12T11:20:00Z',
   },
@@ -55,7 +57,7 @@ const mockWorkflows: Workflow[] = [
     id: 4,
     name: 'Notification Service',
     description: 'Multi-channel notification dispatch',
-    status: 1,
+    status: 'enabled',
     created_at: '2026-09-10T11:00:00Z',
     updated_at: '2026-09-14T07:00:00Z',
   },
@@ -99,7 +101,7 @@ export async function createWorkflow(name: string, description?: string): Promis
       id: ++mockIdCounter,
       name,
       description: description || '',
-      status: 0,
+      status: 'draft',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }
@@ -116,7 +118,7 @@ export async function createWorkflow(name: string, description?: string): Promis
   return res.json()
 }
 
-export async function updateWorkflow(id: number, data: { name?: string; description?: string; status?: number }): Promise<void> {
+export async function updateWorkflow(id: number, data: { name?: string; description?: string; status?: WorkflowStatus }): Promise<void> {
   if (isMockEnabled()) {
     await delay(200)
     const workflow = mockWorkflows.find(w => w.id === id)
