@@ -197,13 +197,11 @@ func validateGraph(nodes []types.Node, edges []types.Edge, entryNodeId string) [
 		reachable := getReachableNodes(entryNodeId, outgoing)
 		for _, node := range nodes {
 			if !reachable[node.Id] && node.Id != entryNodeId {
-				if len(incoming[node.Id]) == 0 && node.Id != entryNodeId {
-					errors = append(errors, types.ValidationError{
-						Code:    "UNREACHABLE_NODE",
-						Message: "node is not reachable from entry node: " + node.Id,
-						NodeId:  node.Id,
-					})
-				}
+				errors = append(errors, types.ValidationError{
+					Code:    "UNREACHABLE_NODE",
+					Message: "node is not reachable from entry node: " + node.Id,
+					NodeId:  node.Id,
+				})
 			}
 		}
 	}

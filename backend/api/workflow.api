@@ -206,7 +206,7 @@ service workflow-api {
 	@handler ValidateWorkflowHandler
 	post /workflows/:id/validate (ValidateWorkflowReq) returns (ValidateWorkflowResp)
 
-	@doc "Enable workflow (draft -> enabled)"
+	@doc "Enable workflow (draft|disabled -> enabled)"
 	@handler EnableWorkflowHandler
 	post /workflows/:id/enable (EnableWorkflowReq) returns (EnableWorkflowResp)
 

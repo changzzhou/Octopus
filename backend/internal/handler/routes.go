@@ -57,7 +57,7 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Handler: DisableWorkflowHandler(serverCtx),
 			},
 			{
-				// Enable workflow (draft -> enabled)
+				// Enable workflow (draft|disabled -> enabled)
 				Method:  http.MethodPost,
 				Path:    "/workflows/:id/enable",
 				Handler: EnableWorkflowHandler(serverCtx),

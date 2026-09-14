@@ -36,8 +36,8 @@ func (l *EnableWorkflowLogic) EnableWorkflow(req *types.EnableWorkflowReq) (resp
 		return nil, errorx.NewInternalError("failed to find workflow")
 	}
 
-	if workflow.Status != "draft" {
-		return nil, errorx.NewBadRequestError("can only enable draft workflows; current status: " + workflow.Status)
+	if workflow.Status != "draft" && workflow.Status != "disabled" {
+		return nil, errorx.NewBadRequestError("can only enable draft or disabled workflows; current status: " + workflow.Status)
 	}
 
 	var nodes []types.Node
