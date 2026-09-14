@@ -57,6 +57,22 @@ type EnableWorkflowResp struct {
 	Version int    `json:"version"`
 }
 
+type GetRunReq struct {
+	RunId int64 `path:"runId"`
+}
+
+type GetRunResp struct {
+	Run Run `json:"run"`
+}
+
+type GetRunStepsReq struct {
+	RunId int64 `path:"runId"`
+}
+
+type GetRunStepsResp struct {
+	Steps []Step `json:"steps"`
+}
+
 type GetWorkflowReq struct {
 	Id int64 `path:"id"`
 }
@@ -98,6 +114,44 @@ type Position struct {
 	Y float64 `json:"y"`
 }
 
+type Run struct {
+	Id                 int64                       `json:"id"`
+	WorkflowId         int64                       `json:"workflow_id"`
+	WorkflowVersion    int                         `json:"workflow_version"`
+	DefinitionSnapshot *WorkflowDefinitionSnapshot `json:"definition_snapshot"`
+	Status             string                      `json:"status"`
+	TriggerType        string                      `json:"trigger_type"`
+	StartedAt          string                      `json:"started_at,optional"`
+	FinishedAt         string                      `json:"finished_at,optional"`
+	ErrorMessage       string                      `json:"error_message,optional"`
+	CreatedAt          string                      `json:"created_at"`
+	UpdatedAt          string                      `json:"updated_at"`
+}
+
+type Step struct {
+	Id           int64  `json:"id"`
+	RunId        int64  `json:"run_id"`
+	NodeId       string `json:"node_id"`
+	NodeType     string `json:"node_type"`
+	NodeConfig   string `json:"node_config,optional"`
+	Status       string `json:"status"`
+	InputData    string `json:"input_data,optional"`
+	OutputData   string `json:"output_data,optional"`
+	ErrorMessage string `json:"error_message,optional"`
+	StartedAt    string `json:"started_at,optional"`
+	FinishedAt   string `json:"finished_at,optional"`
+	CreatedAt    string `json:"created_at"`
+	UpdatedAt    string `json:"updated_at"`
+}
+
+type TriggerRunReq struct {
+	Id int64 `path:"id"`
+}
+
+type TriggerRunResp struct {
+	RunId int64 `json:"run_id"`
+}
+
 type UpdateWorkflowReq struct {
 	Id              int64       `path:"id"`
 	Name            string      `json:"name,optional"`
@@ -128,6 +182,13 @@ type ValidationError struct {
 	Message string `json:"message"`
 	NodeId  string `json:"node_id,optional"`
 	EdgeId  string `json:"edge_id,optional"`
+}
+
+type WorkflowDefinitionSnapshot struct {
+	Nodes           []Node `json:"nodes"`
+	Edges           []Edge `json:"edges"`
+	EntryNodeId     string `json:"entry_node_id,optional"`
+	VariablesSchema string `json:"variables_schema,optional"`
 }
 
 type WorkflowDetail struct {
