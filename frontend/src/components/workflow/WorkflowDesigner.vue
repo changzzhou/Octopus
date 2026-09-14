@@ -54,10 +54,10 @@ const saving = ref(false)
 
 const flowId = `workflow-${props.workflowId}`
 
-const nodes = ref<any[]>([])
-const edges = ref<any[]>([])
+// Use a single modelValue array that contains both nodes and edges
+const elements = ref<any[]>([])
 
-const nodeCount = computed(() => nodes.value.length)
+const nodeCount = computed(() => elements.value.filter(el => !el.source).length)
 
 const vfInstance = ref<VueFlowStore | null>(null)
 
@@ -68,13 +68,17 @@ function onInit(instance: VueFlowStore) {
 onMounted(async () => {
   await nextTick()
   
+  const initialElements: any[] = []
+  
   if (props.initialNodes?.length) {
-    nodes.value = props.initialNodes.map(fromBeNode)
+    initialElements.push(...props.initialNodes.map(fromBeNode))
   }
   
   if (props.initialEdges?.length) {
-    edges.value = props.initialEdges.map(fromBeEdge)
+    initialElements.push(...props.initialEdges.map(fromBeEdge))
   }
+  
+  elements.value = initialElements
 })
 
 function markDirty() {
@@ -103,7 +107,7 @@ function handleConnect(connection: any) {
     labelBgPadding: [4, 4] as [number, number],
   }
   
-  edges.value = [...edges.value, newEdge]
+  elements.value = [...elements.value, newEdge]
   markDirty()
 }
 
@@ -134,10 +138,8 @@ function onDrop(event: DragEvent) {
     },
   }
   
-  vfInstance.value.addNodes([newNode])
-  nextTick(() => {
-    markDirty()
-  })
+  elements.value = [...elements.value, newNode]
+  markDirty()
 }
 
 function onDragOver(event: DragEvent) {
@@ -155,15 +157,19 @@ function onPaneClick() {
   selectedNode.value = null
 }
 
+function onNodeDragStop() {
+  markDirty()
+}
+
 function updateNodeData(nodeId: string, data: WorkflowNodeData) {
-  const nodeIndex = nodes.value.findIndex(n => n.id === nodeId)
+  const nodeIndex = elements.value.findIndex(n => n.id === nodeId && !n.source)
   if (nodeIndex !== -1) {
-    const updatedNodes = [...nodes.value]
-    updatedNodes[nodeIndex] = {
-      ...updatedNodes[nodeIndex],
+    const updatedElements = [...elements.value]
+    updatedElements[nodeIndex] = {
+      ...updatedElements[nodeIndex],
       data,
     }
-    nodes.value = updatedNodes
+    elements.value = updatedElements
     
     if (selectedNode.value?.id === nodeId) {
       selectedNode.value = { ...selectedNode.value, data }
@@ -173,8 +179,15 @@ function updateNodeData(nodeId: string, data: WorkflowNodeData) {
 }
 
 function deleteNode(nodeId: string) {
-  nodes.value = nodes.value.filter(n => n.id !== nodeId)
-  edges.value = edges.value.filter(e => e.source !== nodeId && e.target !== nodeId)
+  elements.value = elements.value.filter(el => {
+    if (el.source) {
+      // This is an edge - remove if connected to deleted node
+      return el.source !== nodeId && el.target !== nodeId
+    } else {
+      // This is a node - remove if it's the deleted node
+      return el.id !== nodeId
+    }
+  })
   selectedNode.value = null
   markDirty()
 }
@@ -186,17 +199,17 @@ function closeSidebar() {
 async function saveWorkflow() {
   saving.value = true
   try {
-    const vfNodes = nodes.value
-    const vfEdges = edges.value
+    const vfNodes = elements.value.filter(el => !el.source)
+    const vfEdges = elements.value.filter(el => el.source)
     
-    const beNodes: Node[] = vfNodes.map(n => toBeNode({
+    const beNodes: Node[] = vfNodes.map((n: any) => toBeNode({
       id: n.id,
       type: n.type || 'script',
       position: n.position,
       data: n.data as WorkflowNodeData,
     }))
     
-    const beEdges: Edge[] = vfEdges.map(e => toBeEdge({
+    const beEdges: Edge[] = vfEdges.map((e: any) => toBeEdge({
       id: e.id,
       source: e.source,
       target: e.target,
@@ -222,16 +235,16 @@ async function saveWorkflow() {
 
 defineExpose({
   getCanvas: () => {
-    const vfNodes = nodes.value
-    const vfEdges = edges.value
+    const vfNodes = elements.value.filter(el => !el.source)
+    const vfEdges = elements.value.filter(el => el.source)
     return {
-      nodes: vfNodes.map(n => toBeNode({
+      nodes: vfNodes.map((n: any) => toBeNode({
         id: n.id,
         type: n.type || 'script',
         position: n.position,
         data: n.data as WorkflowNodeData,
       })),
-      edges: vfEdges.map(e => toBeEdge({
+      edges: vfEdges.map((e: any) => toBeEdge({
         id: e.id,
         source: e.source,
         target: e.target,
@@ -275,15 +288,14 @@ defineExpose({
       >
         <VueFlow
           :id="flowId"
-          v-model:nodes="nodes"
-          v-model:edges="edges"
+          v-model="elements"
           :node-types="nodeTypes"
           :default-viewport="{ zoom: 1, x: 100, y: 100 }"
           :min-zoom="0.25"
           :max-zoom="2"
           @node-click="onNodeClick"
           @pane-click="onPaneClick"
-          @node-drag-stop="markDirty"
+          @node-drag-stop="onNodeDragStop"
           @connect="handleConnect"
           @vue-flow-init="onInit"
         >
