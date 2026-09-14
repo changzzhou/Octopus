@@ -1,6 +1,3 @@
-// Code scaffolded by goctl. Safe to edit.
-// goctl 1.10.2
-
 package logic
 
 import (
@@ -18,7 +15,6 @@ type HealthLogic struct {
 	svcCtx *svc.ServiceContext
 }
 
-// Health check endpoint
 func NewHealthLogic(ctx context.Context, svcCtx *svc.ServiceContext) *HealthLogic {
 	return &HealthLogic{
 		Logger: logx.WithContext(ctx),
