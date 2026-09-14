@@ -32,6 +32,104 @@ function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
 
+// ========== Run/Step Types (aligned with BE-2/BE-3 contract) ==========
+
+export interface WorkflowDefinitionSnapshot {
+  nodes: Node[]
+  edges: Edge[]
+  entry_node_id?: string
+  variables_schema?: string
+}
+
+export type RunStatus = 'pending' | 'running' | 'succeeded' | 'failed' | 'cancelled'
+export type StepStatus = 'pending' | 'running' | 'succeeded' | 'failed' | 'skipped'
+
+export interface Run {
+  id: number
+  workflow_id: number
+  workflow_version: number
+  definition_snapshot?: WorkflowDefinitionSnapshot
+  status: RunStatus
+  trigger_type: string
+  started_at?: string
+  finished_at?: string
+  error_message?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface Step {
+  id: number
+  run_id: number
+  node_id: string
+  node_type: string
+  node_config?: string
+  status: StepStatus
+  input_data?: string
+  output_data?: string
+  error_message?: string
+  started_at?: string
+  finished_at?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface TriggerRunResponse {
+  run_id: number
+}
+
+export interface GetRunResponse {
+  run: Run
+}
+
+export interface GetRunStepsResponse {
+  steps: Step[]
+}
+
+// ========== SSE Event Types (aligned with BE-3 contract) ==========
+
+export interface SSEEventEnvelope {
+  event_id: string
+  event_type: string
+  run_id: number
+  workflow_id: number
+  occurred_at: string
+  sequence?: number
+  payload: unknown
+}
+
+export interface RunStatusChangedPayload {
+  from_status: string
+  to_status: string
+  reason?: string
+}
+
+export interface StepStatusChangedPayload {
+  step_id: string
+  from: string
+  to: string
+  error_summary?: string
+}
+
+export interface RunTerminalPayload {
+  final_status: string
+}
+
+export interface HumanWaitingPayload {
+  step_id: string
+  prompt_summary?: string
+  context_refs?: string[]
+}
+
+export const SSE_EVENT_TYPES = {
+  RUN_STATUS_CHANGED: 'run.status_changed',
+  STEP_STATUS_CHANGED: 'step.status_changed',
+  RUN_TERMINAL: 'run.terminal',
+  HUMAN_WAITING: 'human.waiting',
+} as const
+
+// ========== Mock Data ==========
+
 // Mock data for workflows list
 const mockWorkflows: WorkflowSummary[] = [
   {
@@ -131,6 +229,107 @@ const mockWorkflowDetails: Record<number, WorkflowDetail> = {
 }
 
 let mockIdCounter = 100
+let mockRunIdCounter = 1000
+let mockStepIdCounter = 10000
+
+const mockRuns: Map<number, Run[]> = new Map([
+  [1, [
+    {
+      id: 1,
+      workflow_id: 1,
+      workflow_version: 3,
+      definition_snapshot: {
+        nodes: [
+          { id: 'start', type: 'script', name: 'Initialize', position: { x: 100, y: 100 } },
+          { id: 'fetch', type: 'http', name: 'Fetch Data', position: { x: 250, y: 100 } },
+          { id: 'transform', type: 'script', name: 'Transform', position: { x: 400, y: 100 } },
+          { id: 'notify', type: 'http', name: 'Send Notification', position: { x: 550, y: 100 } },
+        ],
+        edges: [
+          { id: 'e1', source: 'start', target: 'fetch', outlet: 'success' },
+          { id: 'e2', source: 'fetch', target: 'transform', outlet: 'success' },
+          { id: 'e3', source: 'transform', target: 'notify', outlet: 'success' },
+        ],
+        entry_node_id: 'start',
+      },
+      status: 'succeeded',
+      trigger_type: 'manual',
+      started_at: '2026-09-14T08:00:00Z',
+      finished_at: '2026-09-14T08:05:32Z',
+      created_at: '2026-09-14T08:00:00Z',
+      updated_at: '2026-09-14T08:05:32Z',
+    },
+    {
+      id: 2,
+      workflow_id: 1,
+      workflow_version: 3,
+      definition_snapshot: {
+        nodes: [
+          { id: 'start', type: 'script', name: 'Initialize', position: { x: 100, y: 100 } },
+          { id: 'fetch', type: 'http', name: 'Fetch Data', position: { x: 250, y: 100 } },
+          { id: 'transform', type: 'script', name: 'Transform', position: { x: 400, y: 100 } },
+          { id: 'notify', type: 'http', name: 'Send Notification', position: { x: 550, y: 100 } },
+        ],
+        edges: [
+          { id: 'e1', source: 'start', target: 'fetch', outlet: 'success' },
+          { id: 'e2', source: 'fetch', target: 'transform', outlet: 'success' },
+          { id: 'e3', source: 'transform', target: 'notify', outlet: 'success' },
+        ],
+        entry_node_id: 'start',
+      },
+      status: 'running',
+      trigger_type: 'manual',
+      started_at: '2026-09-14T10:30:00Z',
+      created_at: '2026-09-14T10:30:00Z',
+      updated_at: '2026-09-14T10:32:15Z',
+    },
+  ]],
+  [2, [
+    {
+      id: 3,
+      workflow_id: 2,
+      workflow_version: 1,
+      definition_snapshot: {
+        nodes: [
+          { id: 'welcome', type: 'http', name: 'Send Welcome Email', position: { x: 100, y: 100 } },
+          { id: 'setup', type: 'script', name: 'Setup Account', position: { x: 300, y: 100 } },
+        ],
+        edges: [
+          { id: 'e1', source: 'welcome', target: 'setup', outlet: 'success' },
+        ],
+        entry_node_id: 'welcome',
+      },
+      status: 'failed',
+      trigger_type: 'trial',
+      started_at: '2026-09-13T16:00:00Z',
+      finished_at: '2026-09-13T16:01:45Z',
+      error_message: 'Step "Setup Account" failed: invalid user configuration',
+      created_at: '2026-09-13T16:00:00Z',
+      updated_at: '2026-09-13T16:01:45Z',
+    },
+  ]],
+])
+
+const mockSteps: Map<number, Step[]> = new Map([
+  [1, [
+    { id: 1, run_id: 1, node_id: 'start', node_type: 'script', status: 'succeeded', started_at: '2026-09-14T08:00:00Z', finished_at: '2026-09-14T08:00:05Z', created_at: '2026-09-14T08:00:00Z', updated_at: '2026-09-14T08:00:05Z' },
+    { id: 2, run_id: 1, node_id: 'fetch', node_type: 'http', status: 'succeeded', started_at: '2026-09-14T08:00:05Z', finished_at: '2026-09-14T08:02:30Z', created_at: '2026-09-14T08:00:05Z', updated_at: '2026-09-14T08:02:30Z' },
+    { id: 3, run_id: 1, node_id: 'transform', node_type: 'script', status: 'succeeded', started_at: '2026-09-14T08:02:30Z', finished_at: '2026-09-14T08:04:00Z', created_at: '2026-09-14T08:02:30Z', updated_at: '2026-09-14T08:04:00Z' },
+    { id: 4, run_id: 1, node_id: 'notify', node_type: 'http', status: 'succeeded', started_at: '2026-09-14T08:04:00Z', finished_at: '2026-09-14T08:05:32Z', created_at: '2026-09-14T08:04:00Z', updated_at: '2026-09-14T08:05:32Z' },
+  ]],
+  [2, [
+    { id: 5, run_id: 2, node_id: 'start', node_type: 'script', status: 'succeeded', started_at: '2026-09-14T10:30:00Z', finished_at: '2026-09-14T10:30:08Z', created_at: '2026-09-14T10:30:00Z', updated_at: '2026-09-14T10:30:08Z' },
+    { id: 6, run_id: 2, node_id: 'fetch', node_type: 'http', status: 'running', started_at: '2026-09-14T10:30:08Z', created_at: '2026-09-14T10:30:08Z', updated_at: '2026-09-14T10:32:15Z' },
+    { id: 7, run_id: 2, node_id: 'transform', node_type: 'script', status: 'pending', created_at: '2026-09-14T10:30:00Z', updated_at: '2026-09-14T10:30:00Z' },
+    { id: 8, run_id: 2, node_id: 'notify', node_type: 'http', status: 'pending', created_at: '2026-09-14T10:30:00Z', updated_at: '2026-09-14T10:30:00Z' },
+  ]],
+  [3, [
+    { id: 9, run_id: 3, node_id: 'welcome', node_type: 'http', status: 'succeeded', started_at: '2026-09-13T16:00:00Z', finished_at: '2026-09-13T16:00:30Z', created_at: '2026-09-13T16:00:00Z', updated_at: '2026-09-13T16:00:30Z' },
+    { id: 10, run_id: 3, node_id: 'setup', node_type: 'script', status: 'failed', error_message: 'invalid user configuration', started_at: '2026-09-13T16:00:30Z', finished_at: '2026-09-13T16:01:45Z', created_at: '2026-09-13T16:00:30Z', updated_at: '2026-09-13T16:01:45Z' },
+  ]],
+])
+
+// ========== Workflow List API ==========
 
 export interface ListWorkflowsResponse {
   total: number
@@ -365,4 +564,340 @@ export async function checkHealth(): Promise<{ status: string; version: string }
   const res = await fetch(`${API_BASE}/health`)
   if (!res.ok) throw new Error('Health check failed')
   return res.json()
+}
+
+// ========== Run/Step API (FE-3) ==========
+
+/**
+ * Trigger a workflow run (works for draft workflows too - trial run with frozen contract)
+ */
+export async function triggerRun(workflowId: number): Promise<TriggerRunResponse> {
+  if (isMockEnabled()) {
+    await delay(400)
+    const workflow = mockWorkflows.find(w => w.id === workflowId)
+    if (!workflow) throw new Error('Workflow not found')
+    
+    const newRunId = ++mockRunIdCounter
+    const newRun: Run = {
+      id: newRunId,
+      workflow_id: workflowId,
+      workflow_version: 1,
+      definition_snapshot: {
+        nodes: [
+          { id: 'node1', type: 'script', name: 'Step 1', position: { x: 100, y: 100 } },
+          { id: 'node2', type: 'http', name: 'Step 2', position: { x: 250, y: 100 } },
+        ],
+        edges: [
+          { id: 'e1', source: 'node1', target: 'node2', outlet: 'success' },
+        ],
+        entry_node_id: 'node1',
+      },
+      status: 'pending',
+      trigger_type: workflow.status === 'draft' ? 'trial' : 'manual',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }
+    
+    const existingRuns = mockRuns.get(workflowId) || []
+    existingRuns.unshift(newRun)
+    mockRuns.set(workflowId, existingRuns)
+    
+    const initialSteps: Step[] = [
+      { id: ++mockStepIdCounter, run_id: newRunId, node_id: 'node1', node_type: 'script', status: 'pending', created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+      { id: ++mockStepIdCounter, run_id: newRunId, node_id: 'node2', node_type: 'http', status: 'pending', created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+    ]
+    mockSteps.set(newRunId, initialSteps)
+    
+    simulateRunExecution(newRunId)
+    
+    return { run_id: newRunId }
+  }
+  
+  const res = await fetch(`${API_BASE}/workflows/${workflowId}/runs`, { method: 'POST' })
+  if (!res.ok) throw new Error('Failed to trigger run')
+  return res.json()
+}
+
+/**
+ * Simulate run execution for mock mode (updates run/step status over time)
+ */
+function simulateRunExecution(runId: number) {
+  const runSteps = mockSteps.get(runId)
+  if (!runSteps) return
+  
+  let allRuns: Run[] = []
+  mockRuns.forEach(runs => allRuns = allRuns.concat(runs))
+  const targetRun = allRuns.find(r => r.id === runId)
+  if (!targetRun) return
+  
+  let currentStepIndex = 0
+  
+  function executeNextStep() {
+    if (!runSteps || !targetRun) return
+    
+    if (currentStepIndex >= runSteps.length) {
+      targetRun.status = 'succeeded'
+      targetRun.finished_at = new Date().toISOString()
+      targetRun.updated_at = new Date().toISOString()
+      return
+    }
+    
+    const step = runSteps[currentStepIndex]
+    
+    if (currentStepIndex === 0) {
+      targetRun.status = 'running'
+      targetRun.started_at = new Date().toISOString()
+    }
+    
+    step.status = 'running'
+    step.started_at = new Date().toISOString()
+    step.updated_at = new Date().toISOString()
+    targetRun.updated_at = new Date().toISOString()
+    
+    setTimeout(() => {
+      if (!targetRun) return
+      
+      const shouldFail = Math.random() < 0.1
+      if (shouldFail) {
+        step.status = 'failed'
+        step.error_message = 'Simulated failure for demonstration'
+        step.finished_at = new Date().toISOString()
+        step.updated_at = new Date().toISOString()
+        
+        targetRun.status = 'failed'
+        targetRun.error_message = `Step "${step.node_id}" failed: ${step.error_message}`
+        targetRun.finished_at = new Date().toISOString()
+        targetRun.updated_at = new Date().toISOString()
+        return
+      }
+      
+      step.status = 'succeeded'
+      step.finished_at = new Date().toISOString()
+      step.updated_at = new Date().toISOString()
+      
+      currentStepIndex++
+      executeNextStep()
+    }, 1500 + Math.random() * 2000)
+  }
+  
+  setTimeout(executeNextStep, 500)
+}
+
+/**
+ * Get run details by run ID
+ */
+export async function getRun(runId: number): Promise<GetRunResponse> {
+  if (isMockEnabled()) {
+    await delay(150)
+    let foundRun: Run | undefined
+    mockRuns.forEach(runs => {
+      const r = runs.find(run => run.id === runId)
+      if (r) foundRun = r
+    })
+    if (!foundRun) throw new Error('Run not found')
+    return { run: foundRun }
+  }
+  
+  const res = await fetch(`${API_BASE}/runs/${runId}`)
+  if (!res.ok) throw new Error('Failed to fetch run')
+  return res.json()
+}
+
+/**
+ * Get all steps for a run
+ */
+export async function getRunSteps(runId: number): Promise<GetRunStepsResponse> {
+  if (isMockEnabled()) {
+    await delay(150)
+    const steps = mockSteps.get(runId) || []
+    return { steps }
+  }
+  
+  const res = await fetch(`${API_BASE}/runs/${runId}/steps`)
+  if (!res.ok) throw new Error('Failed to fetch run steps')
+  return res.json()
+}
+
+/**
+ * Get runs for a workflow
+ */
+export async function getWorkflowRuns(workflowId: number): Promise<{ runs: Run[] }> {
+  if (isMockEnabled()) {
+    await delay(200)
+    const runs = mockRuns.get(workflowId) || []
+    return { runs }
+  }
+  
+  const res = await fetch(`${API_BASE}/workflows/${workflowId}/runs`)
+  if (!res.ok) throw new Error('Failed to fetch workflow runs')
+  return res.json()
+}
+
+// ========== SSE Subscription (BE-3 integration) ==========
+
+export type SSEEventHandler = (event: SSEEventEnvelope) => void
+
+export interface SSESubscription {
+  close: () => void
+}
+
+/**
+ * Subscribe to run events via SSE (Server-Sent Events).
+ * Aligned with BE-3 contract: GET /api/v1/runs/:runId/events
+ * 
+ * Event types:
+ * - run.status_changed: Run status transition
+ * - step.status_changed: Step status transition
+ * - run.terminal: Run reached terminal state
+ * - human.waiting: Human task waiting for input
+ * 
+ * @param runId - The run ID to subscribe to
+ * @param onEvent - Callback for each event
+ * @param onError - Optional error callback
+ * @returns Subscription object with close() method
+ */
+export function subscribeRunEvents(
+  runId: number,
+  onEvent: SSEEventHandler,
+  onError?: (error: Event) => void
+): SSESubscription {
+  if (isMockEnabled()) {
+    return createMockSSESubscription(runId, onEvent)
+  }
+  
+  const eventSource = new EventSource(`${API_BASE}/runs/${runId}/events`)
+  
+  const handleEvent = (e: MessageEvent) => {
+    try {
+      const envelope: SSEEventEnvelope = JSON.parse(e.data)
+      onEvent(envelope)
+    } catch (err) {
+      console.error('Failed to parse SSE event:', err)
+    }
+  }
+  
+  eventSource.addEventListener(SSE_EVENT_TYPES.RUN_STATUS_CHANGED, handleEvent)
+  eventSource.addEventListener(SSE_EVENT_TYPES.STEP_STATUS_CHANGED, handleEvent)
+  eventSource.addEventListener(SSE_EVENT_TYPES.RUN_TERMINAL, handleEvent)
+  eventSource.addEventListener(SSE_EVENT_TYPES.HUMAN_WAITING, handleEvent)
+  
+  eventSource.onerror = (err) => {
+    console.error('SSE connection error:', err)
+    onError?.(err)
+  }
+  
+  return {
+    close: () => {
+      eventSource.close()
+    }
+  }
+}
+
+/**
+ * Mock SSE subscription for development
+ */
+function createMockSSESubscription(runId: number, onEvent: SSEEventHandler): SSESubscription {
+  let active = true
+  let sequence = 0
+  
+  const interval = setInterval(() => {
+    if (!active) return
+    
+    let foundRun: Run | undefined
+    mockRuns.forEach(runs => {
+      const r = runs.find(run => run.id === runId)
+      if (r) foundRun = r
+    })
+    
+    if (!foundRun) return
+    
+    const steps = mockSteps.get(runId) || []
+    const runningStep = steps.find(s => s.status === 'running')
+    
+    if (runningStep) {
+      onEvent({
+        event_id: `mock-${Date.now()}`,
+        event_type: SSE_EVENT_TYPES.STEP_STATUS_CHANGED,
+        run_id: runId,
+        workflow_id: foundRun.workflow_id,
+        occurred_at: new Date().toISOString(),
+        sequence: ++sequence,
+        payload: {
+          step_id: runningStep.node_id,
+          from: 'pending',
+          to: 'running',
+        } as StepStatusChangedPayload,
+      })
+    }
+    
+    if (['succeeded', 'failed', 'cancelled'].includes(foundRun.status)) {
+      onEvent({
+        event_id: `mock-${Date.now()}`,
+        event_type: SSE_EVENT_TYPES.RUN_TERMINAL,
+        run_id: runId,
+        workflow_id: foundRun.workflow_id,
+        occurred_at: new Date().toISOString(),
+        sequence: ++sequence,
+        payload: {
+          final_status: foundRun.status,
+        } as RunTerminalPayload,
+      })
+      clearInterval(interval)
+    }
+  }, 2000)
+  
+  return {
+    close: () => {
+      active = false
+      clearInterval(interval)
+    }
+  }
+}
+
+/**
+ * Polling fallback for execution state updates.
+ * Use this when SSE is not available or as a backup.
+ * 
+ * @param runId - The run ID to poll
+ * @param onUpdate - Callback for status updates
+ * @param intervalMs - Polling interval (default 2000ms)
+ * @returns Cleanup function to stop polling
+ */
+export function pollRunStatus(
+  runId: number,
+  onUpdate: (run: Run, steps: Step[]) => void,
+  intervalMs = 2000
+): () => void {
+  let active = true
+  
+  async function poll() {
+    if (!active) return
+    
+    try {
+      const [runRes, stepsRes] = await Promise.all([
+        getRun(runId),
+        getRunSteps(runId),
+      ])
+      
+      if (active) {
+        onUpdate(runRes.run, stepsRes.steps)
+        
+        const isTerminal = ['succeeded', 'failed', 'cancelled'].includes(runRes.run.status)
+        if (!isTerminal) {
+          setTimeout(poll, intervalMs)
+        }
+      }
+    } catch (e) {
+      console.error('Polling error:', e)
+      if (active) {
+        setTimeout(poll, intervalMs * 2)
+      }
+    }
+  }
+  
+  poll()
+  
+  return () => {
+    active = false
+  }
 }

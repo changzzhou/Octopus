@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { listWorkflows, createWorkflow, type WorkflowSummary, type WorkflowStatus } from '../api/workflows'
+import { listWorkflows, createWorkflow, triggerRun, type WorkflowSummary, type WorkflowStatus } from '../api/workflows'
 
 const router = useRouter()
 const workflows = ref<WorkflowSummary[]>([])
@@ -14,6 +14,7 @@ const newWorkflowName = ref('')
 const newWorkflowDescription = ref('')
 const creating = ref(false)
 const createError = ref<string | null>(null)
+const triggeringId = ref<number | null>(null)
 
 const statusStyles: Record<WorkflowStatus, string> = {
   draft: 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300',
@@ -81,6 +82,23 @@ function closeCreateModal() {
   newWorkflowName.value = ''
   newWorkflowDescription.value = ''
   createError.value = null
+}
+
+async function handleTriggerRun(workflow: WorkflowSummary, event: Event) {
+  event.stopPropagation()
+  event.preventDefault()
+  
+  if (triggeringId.value) return
+  
+  triggeringId.value = workflow.id
+  try {
+    const result = await triggerRun(workflow.id)
+    router.push(`/workflows/${workflow.id}/executions/${result.run_id}`)
+  } catch (e) {
+    console.error('Failed to trigger run:', e)
+  } finally {
+    triggeringId.value = null
+  }
 }
 
 onMounted(loadWorkflows)
@@ -179,12 +197,24 @@ onMounted(loadWorkflows)
                 {{ formatUpdatedTime(workflow.updated_at) }}
               </td>
               <td class="px-6 py-4 text-right">
-                <router-link 
-                  :to="`/workflows/${workflow.id}/design`"
-                  class="inline-flex items-center px-3 py-1 text-sm bg-purple-100 hover:bg-purple-200 dark:bg-purple-900 dark:hover:bg-purple-800 text-purple-700 dark:text-purple-300 rounded-lg transition-colors"
-                >
-                  Design
-                </router-link>
+                <div class="flex items-center justify-end gap-2">
+                  <button
+                    @click="handleTriggerRun(workflow, $event)"
+                    :disabled="triggeringId === workflow.id"
+                    class="inline-flex items-center px-3 py-1 text-sm bg-green-100 hover:bg-green-200 dark:bg-green-900 dark:hover:bg-green-800 text-green-700 dark:text-green-300 rounded-lg transition-colors disabled:opacity-50"
+                    :title="workflow.status === 'draft' ? 'Trial Run' : 'Run'"
+                  >
+                    <span v-if="triggeringId === workflow.id" class="animate-spin mr-1">⏳</span>
+                    <span v-else class="mr-1">▶️</span>
+                    {{ workflow.status === 'draft' ? 'Trial' : 'Run' }}
+                  </button>
+                  <router-link 
+                    :to="`/workflows/${workflow.id}/design`"
+                    class="inline-flex items-center px-3 py-1 text-sm bg-purple-100 hover:bg-purple-200 dark:bg-purple-900 dark:hover:bg-purple-800 text-purple-700 dark:text-purple-300 rounded-lg transition-colors"
+                  >
+                    Design
+                  </router-link>
+                </div>
               </td>
             </tr>
           </tbody>

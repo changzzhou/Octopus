@@ -28,6 +28,13 @@ const router = createRouter({
       name: 'workflow-execution',
       component: () => import('../views/WorkflowExecutionView.vue'),
     },
+    {
+      path: '/runs/:runId',
+      name: 'run-execution',
+      redirect: to => {
+        return { path: `/workflows/0/executions/${to.params.runId}` }
+      },
+    },
   ],
 })
 
