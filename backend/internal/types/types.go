@@ -93,6 +93,14 @@ type HealthResp struct {
 	Version string `json:"version"`
 }
 
+type ListRunsByWorkflowReq struct {
+	Id int64 `path:"id"`
+}
+
+type ListRunsByWorkflowResp struct {
+	Runs []RunSummary `json:"runs"`
+}
+
 type ListWorkflowsReq struct {
 	Page     int    `form:"page,optional,default=1"`
 	PageSize int    `form:"page_size,optional,default=20"`
@@ -130,6 +138,19 @@ type Run struct {
 	ErrorMessage       string                      `json:"error_message,optional"`
 	CreatedAt          string                      `json:"created_at"`
 	UpdatedAt          string                      `json:"updated_at"`
+}
+
+type RunSummary struct {
+	Id              int64  `json:"id"`
+	WorkflowId      int64  `json:"workflow_id"`
+	WorkflowVersion int    `json:"workflow_version"`
+	Status          string `json:"status"`
+	TriggerType     string `json:"trigger_type"`
+	StartedAt       string `json:"started_at,optional"`
+	FinishedAt      string `json:"finished_at,optional"`
+	ErrorMessage    string `json:"error_message,optional"`
+	CreatedAt       string `json:"created_at"`
+	UpdatedAt       string `json:"updated_at"`
 }
 
 type Step struct {
