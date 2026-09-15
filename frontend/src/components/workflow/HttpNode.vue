@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Handle, Position } from '@vue-flow/core'
 import type { WorkflowNodeData, HttpNodeConfig } from '../../types/workflow'
+import { Globe, Check, X } from '@lucide/vue'
 
 defineProps<{
   id: string
@@ -21,7 +22,7 @@ defineProps<{
     />
     
     <div class="node-header">
-      <span class="node-icon">🌐</span>
+      <Globe class="h-4 w-4" />
       <span class="node-title">{{ data.label || 'HTTP Request' }}</span>
     </div>
     
@@ -50,8 +51,12 @@ defineProps<{
     />
     
     <div class="handle-labels">
-      <span class="handle-label success" style="top: 35%">✓</span>
-      <span class="handle-label failure" style="top: 65%">✗</span>
+      <span class="handle-label success" style="top: 35%">
+        <Check class="h-2.5 w-2.5" />
+      </span>
+      <span class="handle-label failure" style="top: 65%">
+        <X class="h-2.5 w-2.5" />
+      </span>
     </div>
   </div>
 </template>
@@ -60,103 +65,100 @@ defineProps<{
 .workflow-node {
   background: white;
   border: 2px solid #3b82f6;
-  border-radius: 8px;
+  border-radius: 6px;
   padding: 0;
-  min-width: 160px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  min-width: 150px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   position: relative;
 }
 
 .workflow-node.selected {
-  border-color: #7c3aed;
-  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.3);
+  border-color: #18181b;
+  box-shadow: 0 0 0 2px rgba(24, 24, 27, 0.2);
 }
 
 .node-header {
   background: #3b82f6;
   color: white;
-  padding: 8px 12px;
-  border-radius: 6px 6px 0 0;
+  padding: 6px 10px;
+  border-radius: 4px 4px 0 0;
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-weight: 600;
-  font-size: 13px;
-}
-
-.node-icon {
-  font-size: 16px;
+  gap: 6px;
+  font-weight: 500;
+  font-size: 12px;
 }
 
 .node-content {
-  padding: 10px 12px;
+  padding: 8px 10px;
 }
 
 .node-badge {
-  padding: 2px 8px;
+  padding: 2px 6px;
   border-radius: 4px;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   display: inline-block;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
+  font-family: ui-monospace, monospace;
 }
 
 .node-badge.get {
-  background: #dbeafe;
+  background: #eff6ff;
   color: #1d4ed8;
 }
 
 .node-badge.post {
-  background: #d1fae5;
+  background: #ecfdf5;
   color: #065f46;
 }
 
 .node-badge.put {
-  background: #fef3c7;
-  color: #92400e;
+  background: #fefce8;
+  color: #a16207;
 }
 
 .node-badge.delete {
-  background: #fee2e2;
-  color: #991b1b;
+  background: #fef2f2;
+  color: #b91c1c;
 }
 
 .node-badge.patch {
-  background: #e0e7ff;
-  color: #3730a3;
+  background: #eef2ff;
+  color: #4338ca;
 }
 
 .node-url {
-  font-size: 11px;
-  color: #6b7280;
-  font-family: monospace;
+  font-size: 10px;
+  color: #71717a;
+  font-family: ui-monospace, monospace;
   word-break: break-all;
 }
 
 .handle-input {
-  width: 12px !important;
-  height: 12px !important;
-  background: #6b7280 !important;
+  width: 10px !important;
+  height: 10px !important;
+  background: #71717a !important;
   border: 2px solid white !important;
 }
 
 .handle-success {
-  width: 12px !important;
-  height: 12px !important;
+  width: 10px !important;
+  height: 10px !important;
   background: #10b981 !important;
   border: 2px solid white !important;
 }
 
 .handle-failure {
-  width: 12px !important;
-  height: 12px !important;
+  width: 10px !important;
+  height: 10px !important;
   background: #ef4444 !important;
   border: 2px solid white !important;
 }
 
 .handle-labels {
   position: absolute;
-  right: 16px;
+  right: 14px;
   top: 0;
   bottom: 0;
   pointer-events: none;
@@ -164,8 +166,10 @@ defineProps<{
 
 .handle-label {
   position: absolute;
-  font-size: 10px;
   transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .handle-label.success {

@@ -2,6 +2,37 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { listWorkflows, createWorkflow, triggerRun, type WorkflowSummary, type WorkflowStatus } from '../api/workflows'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
+import { Card, CardContent } from '@/components/ui/card'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import { 
+  Plus, 
+  Play, 
+  Pencil, 
+  Workflow, 
+  FileText,
+  Loader2,
+  AlertCircle,
+} from '@lucide/vue'
 
 const router = useRouter()
 const workflows = ref<WorkflowSummary[]>([])
@@ -16,14 +47,14 @@ const creating = ref(false)
 const createError = ref<string | null>(null)
 const triggeringId = ref<number | null>(null)
 
-const statusStyles: Record<WorkflowStatus, string> = {
-  draft: 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300',
-  enabled: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
-  disabled: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
+const statusVariantMap: Record<WorkflowStatus, 'secondary' | 'success' | 'destructive'> = {
+  draft: 'secondary',
+  enabled: 'success',
+  disabled: 'destructive',
 }
 
-function getStatusStyle(status: WorkflowStatus): string {
-  return statusStyles[status] || statusStyles.draft
+function getStatusVariant(status: WorkflowStatus) {
+  return statusVariantMap[status] || 'secondary'
 }
 
 function formatUpdatedTime(dateStr: string) {
@@ -105,16 +136,18 @@ onMounted(loadWorkflows)
 </script>
 
 <template>
-  <div class="min-h-screen bg-slate-100 dark:bg-slate-900">
-    <header class="bg-white dark:bg-slate-800 shadow">
-      <div class="container mx-auto px-4 py-4 flex items-center justify-between">
-        <router-link to="/" class="text-2xl font-bold text-purple-600 dark:text-purple-400">
-          🐙 Octopus
+  <div class="min-h-screen bg-zinc-50 dark:bg-zinc-950">
+    <!-- Header -->
+    <header class="sticky top-0 z-40 border-b border-zinc-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:border-zinc-800 dark:bg-zinc-950/95 dark:supports-[backdrop-filter]:bg-zinc-950/60">
+      <div class="container mx-auto flex h-14 items-center justify-between px-4">
+        <router-link to="/" class="flex items-center gap-2 font-semibold text-zinc-900 dark:text-zinc-50">
+          <Workflow class="h-5 w-5" />
+          <span>Octopus</span>
         </router-link>
         <nav>
           <router-link 
             to="/workflows" 
-            class="text-slate-600 dark:text-slate-300 hover:text-purple-600 dark:hover:text-purple-400"
+            class="text-sm text-zinc-600 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50"
           >
             Workflows
           </router-link>
@@ -123,167 +156,169 @@ onMounted(loadWorkflows)
     </header>
 
     <main class="container mx-auto px-4 py-8">
-      <div class="flex justify-between items-center mb-6">
-        <h1 class="text-3xl font-bold text-slate-900 dark:text-white">
-          Workflows
-        </h1>
-        <button 
-          class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg transition-colors"
-          @click="openCreateModal"
-        >
-          + New Workflow
-        </button>
+      <!-- Page Header -->
+      <div class="mb-8 flex items-center justify-between">
+        <div>
+          <h1 class="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
+            Workflows
+          </h1>
+          <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+            Manage and run your automation workflows
+          </p>
+        </div>
+        <Button @click="openCreateModal">
+          <Plus class="h-4 w-4" />
+          New Workflow
+        </Button>
       </div>
 
-      <div v-if="loading" class="text-center py-12 text-slate-500">
-        Loading workflows...
+      <!-- Loading State -->
+      <div v-if="loading" class="flex items-center justify-center py-16">
+        <Loader2 class="h-6 w-6 animate-spin text-zinc-400" />
+        <span class="ml-2 text-sm text-zinc-500">Loading workflows...</span>
       </div>
 
-      <div v-else-if="error" class="text-center py-12 text-red-500">
-        {{ error }}
+      <!-- Error State -->
+      <div v-else-if="error" class="flex flex-col items-center justify-center py-16">
+        <AlertCircle class="h-10 w-10 text-red-500" />
+        <p class="mt-2 text-sm text-red-600">{{ error }}</p>
+        <Button variant="outline" class="mt-4" @click="loadWorkflows">
+          Try Again
+        </Button>
       </div>
 
-      <div v-else-if="workflows.length === 0" class="text-center py-12">
-        <div class="text-6xl mb-4">📋</div>
-        <h2 class="text-xl font-medium text-slate-700 dark:text-slate-300 mb-2">
-          No workflows yet
-        </h2>
-        <p class="text-slate-500 dark:text-slate-400 mb-4">
-          Create your first workflow to get started.
-        </p>
-        <button 
-          class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg transition-colors"
-          @click="openCreateModal"
-        >
-          + Create Workflow
-        </button>
-      </div>
+      <!-- Empty State -->
+      <Card v-else-if="workflows.length === 0" class="mx-auto max-w-md">
+        <CardContent class="flex flex-col items-center py-12">
+          <FileText class="h-12 w-12 text-zinc-300 dark:text-zinc-700" />
+          <h2 class="mt-4 font-medium text-zinc-900 dark:text-zinc-50">
+            No workflows yet
+          </h2>
+          <p class="mt-1 text-center text-sm text-zinc-500 dark:text-zinc-400">
+            Create your first workflow to get started with automation.
+          </p>
+          <Button class="mt-6" @click="openCreateModal">
+            <Plus class="h-4 w-4" />
+            Create Workflow
+          </Button>
+        </CardContent>
+      </Card>
 
-      <div v-else class="overflow-x-auto">
-        <table class="w-full bg-white dark:bg-slate-800 rounded-xl shadow overflow-hidden">
-          <thead class="bg-slate-50 dark:bg-slate-700">
-            <tr>
-              <th class="px-6 py-4 text-left text-sm font-semibold text-slate-700 dark:text-slate-200">Name</th>
-              <th class="px-6 py-4 text-left text-sm font-semibold text-slate-700 dark:text-slate-200">Status</th>
-              <th class="px-6 py-4 text-left text-sm font-semibold text-slate-700 dark:text-slate-200">Updated At</th>
-              <th class="px-6 py-4 text-right text-sm font-semibold text-slate-700 dark:text-slate-200">Actions</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
-            <tr 
+      <!-- Workflows Table -->
+      <Card v-else>
+        <Table>
+          <TableHeader>
+            <TableRow class="hover:bg-transparent">
+              <TableHead>Name</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Updated</TableHead>
+              <TableHead class="text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            <TableRow 
               v-for="workflow in workflows" 
               :key="workflow.id"
-              class="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
             >
-              <td class="px-6 py-4">
+              <TableCell>
                 <router-link 
                   :to="`/workflows/${workflow.id}`"
-                  class="text-slate-900 dark:text-white font-medium hover:text-purple-600 dark:hover:text-purple-400"
+                  class="font-medium text-zinc-900 hover:underline dark:text-zinc-50"
                 >
                   {{ workflow.name }}
                 </router-link>
-                <p v-if="workflow.description" class="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                <p v-if="workflow.description" class="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">
                   {{ workflow.description }}
                 </p>
-              </td>
-              <td class="px-6 py-4">
-                <span 
-                  :class="[getStatusStyle(workflow.status), 'px-2 py-1 rounded-full text-xs font-medium']"
-                >
+              </TableCell>
+              <TableCell>
+                <Badge :variant="getStatusVariant(workflow.status)">
                   {{ workflow.status }}
-                </span>
-              </td>
-              <td class="px-6 py-4 text-sm text-slate-500 dark:text-slate-400">
+                </Badge>
+              </TableCell>
+              <TableCell class="text-zinc-500 dark:text-zinc-400">
                 {{ formatUpdatedTime(workflow.updated_at) }}
-              </td>
-              <td class="px-6 py-4 text-right">
+              </TableCell>
+              <TableCell class="text-right">
                 <div class="flex items-center justify-end gap-2">
-                  <button
+                  <Button
+                    variant="outline"
+                    size="sm"
                     @click="handleTriggerRun(workflow, $event)"
                     :disabled="triggeringId === workflow.id"
-                    class="inline-flex items-center px-3 py-1 text-sm bg-green-100 hover:bg-green-200 dark:bg-green-900 dark:hover:bg-green-800 text-green-700 dark:text-green-300 rounded-lg transition-colors disabled:opacity-50"
-                    :title="workflow.status === 'draft' ? 'Trial Run' : 'Run'"
                   >
-                    <span v-if="triggeringId === workflow.id" class="animate-spin mr-1">⏳</span>
-                    <span v-else class="mr-1">▶️</span>
+                    <Loader2 v-if="triggeringId === workflow.id" class="h-3.5 w-3.5 animate-spin" />
+                    <Play v-else class="h-3.5 w-3.5" />
                     {{ workflow.status === 'draft' ? 'Trial' : 'Run' }}
-                  </button>
-                  <router-link 
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    as="router-link"
                     :to="`/workflows/${workflow.id}/design`"
-                    class="inline-flex items-center px-3 py-1 text-sm bg-purple-100 hover:bg-purple-200 dark:bg-purple-900 dark:hover:bg-purple-800 text-purple-700 dark:text-purple-300 rounded-lg transition-colors"
                   >
+                    <Pencil class="h-3.5 w-3.5" />
                     Design
-                  </router-link>
+                  </Button>
                 </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+              </TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+      </Card>
 
-      <div v-if="total > 0" class="mt-6 text-center text-slate-500">
-        Total: {{ total }} workflow(s)
+      <!-- Total Count -->
+      <div v-if="total > 0" class="mt-4 text-center text-sm text-zinc-500 dark:text-zinc-400">
+        {{ total }} workflow(s) total
       </div>
     </main>
 
-    <!-- Create Workflow Modal -->
-    <div 
-      v-if="showCreateModal" 
-      class="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-      @click.self="closeCreateModal"
-    >
-      <div class="bg-white dark:bg-slate-800 rounded-xl shadow-xl p-6 w-full max-w-md mx-4">
-        <h2 class="text-xl font-bold text-slate-900 dark:text-white mb-4">
-          Create New Workflow
-        </h2>
+    <!-- Create Workflow Dialog -->
+    <Dialog :open="showCreateModal" @update:open="(val) => val ? null : closeCreateModal()">
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Create New Workflow</DialogTitle>
+          <DialogDescription>
+            Add a new workflow to automate your processes.
+          </DialogDescription>
+        </DialogHeader>
         
-        <div class="space-y-4">
-          <div>
-            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-              Name *
-            </label>
-            <input 
+        <div class="space-y-4 py-4">
+          <div class="space-y-2">
+            <Label for="name">Name</Label>
+            <Input 
+              id="name"
               v-model="newWorkflowName"
-              type="text"
               placeholder="Enter workflow name"
-              class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent"
               @keyup.enter="handleCreate"
             />
           </div>
           
-          <div>
-            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-              Description
-            </label>
-            <textarea 
+          <div class="space-y-2">
+            <Label for="description">Description</Label>
+            <Textarea 
+              id="description"
               v-model="newWorkflowDescription"
               placeholder="Enter description (optional)"
-              rows="3"
-              class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
+              :rows="3"
             />
           </div>
           
-          <div v-if="createError" class="text-sm text-red-500">
+          <p v-if="createError" class="text-sm text-red-500">
             {{ createError }}
-          </div>
+          </p>
         </div>
         
-        <div class="flex justify-end gap-3 mt-6">
-          <button 
-            @click="closeCreateModal"
-            class="px-4 py-2 text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 font-medium transition-colors"
-          >
+        <DialogFooter>
+          <Button variant="outline" @click="closeCreateModal">
             Cancel
-          </button>
-          <button 
-            @click="handleCreate"
-            :disabled="creating"
-            class="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-400 text-white font-medium rounded-lg transition-colors"
-          >
+          </Button>
+          <Button @click="handleCreate" :disabled="creating">
+            <Loader2 v-if="creating" class="h-4 w-4 animate-spin" />
             {{ creating ? 'Creating...' : 'Create' }}
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   </div>
 </template>

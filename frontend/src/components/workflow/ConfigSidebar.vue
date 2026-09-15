@@ -2,6 +2,20 @@
 import { computed } from 'vue'
 import type { ScriptNodeConfig, HttpNodeConfig, HumanNodeConfig, NodeType, WorkflowNodeData } from '../../types/workflow'
 import { NODE_TYPE_CONFIGS } from '../../types/workflow'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
+import { Separator } from '@/components/ui/separator'
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from '@/components/ui/select'
+import { X, Trash2, FileCode, Globe, User, MousePointer } from '@lucide/vue'
 
 const props = defineProps<{
   node: any | null
@@ -17,6 +31,12 @@ const nodeConfig = computed(() => {
   if (!props.node?.data) return null
   return NODE_TYPE_CONFIGS[props.node.data.type as NodeType]
 })
+
+const nodeIcons: Record<NodeType, any> = {
+  script: FileCode,
+  http: Globe,
+  human: User,
+}
 
 function updateLabel(value: string) {
   if (props.node?.data) {
@@ -50,304 +70,179 @@ function handleHeadersInput(value: string) {
 </script>
 
 <template>
-  <div class="config-sidebar" :class="{ open: !!node }">
-    <div v-if="node && nodeConfig" class="sidebar-content">
-      <div class="sidebar-header" :style="{ backgroundColor: nodeConfig.color }">
-        <div class="header-title">
-          <span class="header-icon">{{ nodeConfig.icon }}</span>
-          <span>{{ nodeConfig.label }}</span>
+  <Card class="w-64">
+    <!-- Node Selected State -->
+    <template v-if="node && nodeConfig">
+      <CardHeader 
+        class="flex flex-row items-center justify-between px-4 py-3"
+        :style="{ backgroundColor: nodeConfig.color }"
+      >
+        <div class="flex items-center gap-2 text-white">
+          <component :is="nodeIcons[node.data?.type as NodeType]" class="h-4 w-4" />
+          <CardTitle class="text-sm text-white">{{ nodeConfig.label }}</CardTitle>
         </div>
-        <button class="close-btn" @click="$emit('close')">×</button>
-      </div>
+        <Button 
+          variant="ghost" 
+          size="icon" 
+          class="h-6 w-6 text-white hover:bg-white/20 hover:text-white"
+          @click="$emit('close')"
+        >
+          <X class="h-4 w-4" />
+        </Button>
+      </CardHeader>
       
-      <div v-if="node.data" class="sidebar-body">
-        <div class="form-group">
-          <label class="form-label">Label</label>
-          <input
-            type="text"
-            class="form-input"
-            :value="node.data.label"
-            @input="updateLabel(($event.target as HTMLInputElement).value)"
+      <CardContent v-if="node.data" class="space-y-4 p-4">
+        <!-- Label Field -->
+        <div class="space-y-1.5">
+          <Label class="text-xs">Label</Label>
+          <Input
+            :model-value="node.data.label"
+            @update:model-value="updateLabel($event as string)"
             placeholder="Node label"
           />
         </div>
         
+        <!-- Script Node Config -->
         <template v-if="node.data.type === 'script'">
-          <div class="form-group">
-            <label class="form-label">Language</label>
-            <select
-              class="form-select"
-              :value="(node.data.config as ScriptNodeConfig).language"
-              @change="updateConfig('language', ($event.target as HTMLSelectElement).value)"
+          <div class="space-y-1.5">
+            <Label class="text-xs">Language</Label>
+            <Select
+              :model-value="(node.data.config as ScriptNodeConfig).language"
+              @update:model-value="updateConfig('language', $event)"
             >
-              <option value="javascript">JavaScript</option>
-              <option value="python">Python</option>
-              <option value="shell">Shell</option>
-            </select>
+              <SelectTrigger>
+                <SelectValue placeholder="Select language" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="javascript">JavaScript</SelectItem>
+                <SelectItem value="python">Python</SelectItem>
+                <SelectItem value="shell">Shell</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           
-          <div class="form-group">
-            <label class="form-label">Code</label>
-            <textarea
-              class="form-textarea"
-              :value="(node.data.config as ScriptNodeConfig).code"
-              @input="updateConfig('code', ($event.target as HTMLTextAreaElement).value)"
-              rows="8"
+          <div class="space-y-1.5">
+            <Label class="text-xs">Code</Label>
+            <Textarea
+              :model-value="(node.data.config as ScriptNodeConfig).code"
+              @update:model-value="updateConfig('code', $event)"
+              :rows="6"
               placeholder="Enter your code here..."
-            ></textarea>
+              class="font-mono text-xs"
+            />
           </div>
           
-          <div class="form-group">
-            <label class="form-label">Timeout (ms)</label>
-            <input
+          <div class="space-y-1.5">
+            <Label class="text-xs">Timeout (ms)</Label>
+            <Input
               type="number"
-              class="form-input"
-              :value="(node.data.config as ScriptNodeConfig).timeout"
-              @input="updateConfig('timeout', Number(($event.target as HTMLInputElement).value))"
-              min="0"
+              :model-value="(node.data.config as ScriptNodeConfig).timeout"
+              @update:model-value="updateConfig('timeout', Number($event))"
+              :min="0"
             />
           </div>
         </template>
         
+        <!-- HTTP Node Config -->
         <template v-else-if="node.data.type === 'http'">
-          <div class="form-group">
-            <label class="form-label">Method</label>
-            <select
-              class="form-select"
-              :value="(node.data.config as HttpNodeConfig).method"
-              @change="updateConfig('method', ($event.target as HTMLSelectElement).value)"
+          <div class="space-y-1.5">
+            <Label class="text-xs">Method</Label>
+            <Select
+              :model-value="(node.data.config as HttpNodeConfig).method"
+              @update:model-value="updateConfig('method', $event)"
             >
-              <option value="GET">GET</option>
-              <option value="POST">POST</option>
-              <option value="PUT">PUT</option>
-              <option value="DELETE">DELETE</option>
-              <option value="PATCH">PATCH</option>
-            </select>
+              <SelectTrigger>
+                <SelectValue placeholder="Select method" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="GET">GET</SelectItem>
+                <SelectItem value="POST">POST</SelectItem>
+                <SelectItem value="PUT">PUT</SelectItem>
+                <SelectItem value="DELETE">DELETE</SelectItem>
+                <SelectItem value="PATCH">PATCH</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           
-          <div class="form-group">
-            <label class="form-label">URL</label>
-            <input
-              type="text"
-              class="form-input"
-              :value="(node.data.config as HttpNodeConfig).url"
-              @input="updateConfig('url', ($event.target as HTMLInputElement).value)"
+          <div class="space-y-1.5">
+            <Label class="text-xs">URL</Label>
+            <Input
+              :model-value="(node.data.config as HttpNodeConfig).url"
+              @update:model-value="updateConfig('url', $event)"
               placeholder="https://api.example.com/endpoint"
             />
           </div>
           
-          <div class="form-group">
-            <label class="form-label">Headers (JSON)</label>
-            <textarea
-              class="form-textarea"
-              :value="JSON.stringify((node.data.config as HttpNodeConfig).headers || {}, null, 2)"
-              @input="handleHeadersInput(($event.target as HTMLTextAreaElement).value)"
-              rows="4"
+          <div class="space-y-1.5">
+            <Label class="text-xs">Headers (JSON)</Label>
+            <Textarea
+              :model-value="JSON.stringify((node.data.config as HttpNodeConfig).headers || {}, null, 2)"
+              @update:model-value="handleHeadersInput($event as string)"
+              :rows="3"
               placeholder='{"Authorization": "Bearer ..."}'
-            ></textarea>
+              class="font-mono text-xs"
+            />
           </div>
           
-          <div class="form-group">
-            <label class="form-label">Body</label>
-            <textarea
-              class="form-textarea"
-              :value="(node.data.config as HttpNodeConfig).body"
-              @input="updateConfig('body', ($event.target as HTMLTextAreaElement).value)"
-              rows="4"
+          <div class="space-y-1.5">
+            <Label class="text-xs">Body</Label>
+            <Textarea
+              :model-value="(node.data.config as HttpNodeConfig).body"
+              @update:model-value="updateConfig('body', $event)"
+              :rows="3"
               placeholder="Request body (JSON, text, etc.)"
-            ></textarea>
+              class="font-mono text-xs"
+            />
           </div>
           
-          <div class="form-group">
-            <label class="form-label">Timeout (ms)</label>
-            <input
+          <div class="space-y-1.5">
+            <Label class="text-xs">Timeout (ms)</Label>
+            <Input
               type="number"
-              class="form-input"
-              :value="(node.data.config as HttpNodeConfig).timeout"
-              @input="updateConfig('timeout', Number(($event.target as HTMLInputElement).value))"
-              min="0"
+              :model-value="(node.data.config as HttpNodeConfig).timeout"
+              @update:model-value="updateConfig('timeout', Number($event))"
+              :min="0"
             />
           </div>
         </template>
         
+        <!-- Human Node Config -->
         <template v-else-if="node.data.type === 'human'">
-          <div class="form-group">
-            <label class="form-label">Assignee</label>
-            <input
-              type="text"
-              class="form-input"
-              :value="(node.data.config as HumanNodeConfig).assignee"
-              @input="updateConfig('assignee', ($event.target as HTMLInputElement).value)"
+          <div class="space-y-1.5">
+            <Label class="text-xs">Assignee</Label>
+            <Input
+              :model-value="(node.data.config as HumanNodeConfig).assignee"
+              @update:model-value="updateConfig('assignee', $event)"
               placeholder="user@example.com"
             />
           </div>
           
-          <div class="form-group">
-            <label class="form-label">Instructions</label>
-            <textarea
-              class="form-textarea"
-              :value="(node.data.config as HumanNodeConfig).instructions"
-              @input="updateConfig('instructions', ($event.target as HTMLTextAreaElement).value)"
-              rows="4"
+          <div class="space-y-1.5">
+            <Label class="text-xs">Instructions</Label>
+            <Textarea
+              :model-value="(node.data.config as HumanNodeConfig).instructions"
+              @update:model-value="updateConfig('instructions', $event)"
+              :rows="4"
               placeholder="Enter instructions for the human task..."
-            ></textarea>
+            />
           </div>
         </template>
         
-        <div class="form-actions">
-          <button class="btn btn-danger" @click="deleteNode">
-            Delete Node
-          </button>
-        </div>
-      </div>
-    </div>
+        <Separator />
+        
+        <Button variant="destructive" class="w-full" @click="deleteNode">
+          <Trash2 class="h-4 w-4" />
+          Delete Node
+        </Button>
+      </CardContent>
+    </template>
     
-    <div v-else class="sidebar-empty">
-      <div class="empty-icon">👆</div>
-      <p>Select a node to configure</p>
-    </div>
-  </div>
+    <!-- Empty State -->
+    <template v-else>
+      <CardContent class="flex flex-col items-center justify-center py-12 text-center">
+        <MousePointer class="h-8 w-8 text-zinc-300 dark:text-zinc-700" />
+        <p class="mt-3 text-sm text-zinc-500 dark:text-zinc-400">Select a node to configure</p>
+      </CardContent>
+    </template>
+  </Card>
 </template>
-
-<style scoped>
-.config-sidebar {
-  width: 280px;
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  max-height: 100%;
-}
-
-.sidebar-content {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-}
-
-.sidebar-header {
-  padding: 12px 16px;
-  color: white;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.header-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 600;
-}
-
-.header-icon {
-  font-size: 18px;
-}
-
-.close-btn {
-  width: 24px;
-  height: 24px;
-  border: none;
-  background: rgba(255, 255, 255, 0.2);
-  color: white;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 18px;
-  line-height: 1;
-}
-
-.close-btn:hover {
-  background: rgba(255, 255, 255, 0.3);
-}
-
-.sidebar-body {
-  padding: 16px;
-  overflow-y: auto;
-  flex: 1;
-}
-
-.form-group {
-  margin-bottom: 16px;
-}
-
-.form-label {
-  display: block;
-  font-size: 12px;
-  font-weight: 600;
-  color: #374151;
-  margin-bottom: 6px;
-}
-
-.form-input,
-.form-select,
-.form-textarea {
-  width: 100%;
-  padding: 8px 10px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  font-size: 13px;
-  transition: border-color 0.2s;
-}
-
-.form-input:focus,
-.form-select:focus,
-.form-textarea:focus {
-  outline: none;
-  border-color: #7c3aed;
-  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.1);
-}
-
-.form-textarea {
-  resize: vertical;
-  font-family: monospace;
-  font-size: 12px;
-}
-
-.form-actions {
-  margin-top: 24px;
-  padding-top: 16px;
-  border-top: 1px solid #e5e7eb;
-}
-
-.btn {
-  width: 100%;
-  padding: 10px 16px;
-  border: none;
-  border-radius: 6px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  transition: all 0.2s;
-}
-
-.btn-danger {
-  background: #fef2f2;
-  color: #dc2626;
-}
-
-.btn-danger:hover {
-  background: #fee2e2;
-}
-
-.sidebar-empty {
-  padding: 40px 20px;
-  text-align: center;
-  color: #9ca3af;
-}
-
-.empty-icon {
-  font-size: 32px;
-  margin-bottom: 12px;
-}
-
-.sidebar-empty p {
-  margin: 0;
-  font-size: 14px;
-}
-</style>

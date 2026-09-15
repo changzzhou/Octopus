@@ -2,6 +2,23 @@
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getWorkflowDetail, getWorkflowRuns, triggerRun, type WorkflowDetail, type Run } from '../api/workflows'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Separator } from '@/components/ui/separator'
+import { 
+  Workflow, 
+  ArrowLeft, 
+  Play, 
+  Pencil, 
+  Loader2,
+  AlertCircle,
+  Clock,
+  GitBranch,
+  Calendar,
+  Hash,
+  Inbox,
+} from '@lucide/vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -11,6 +28,20 @@ const loading = ref(true)
 const error = ref<string | null>(null)
 const triggering = ref(false)
 const triggerError = ref<string | null>(null)
+
+const statusVariantMap: Record<string, 'secondary' | 'success' | 'destructive'> = {
+  draft: 'secondary',
+  enabled: 'success',
+  disabled: 'destructive',
+}
+
+const runStatusVariantMap: Record<string, 'secondary' | 'success' | 'destructive' | 'info' | 'warning'> = {
+  pending: 'secondary',
+  running: 'info',
+  succeeded: 'success',
+  failed: 'destructive',
+  cancelled: 'warning',
+}
 
 async function loadData() {
   try {
@@ -60,178 +91,173 @@ function formatTime(dateStr: string) {
   })
 }
 
-const runStatusStyles: Record<string, string> = {
-  pending: 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300',
-  running: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
-  succeeded: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
-  failed: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
-  cancelled: 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300',
-}
-
-function getRunStatusStyle(status: string) {
-  return runStatusStyles[status] || runStatusStyles.pending
-}
-
 onMounted(loadData)
 </script>
 
 <template>
-  <div class="min-h-screen bg-slate-100 dark:bg-slate-900">
-    <header class="bg-white dark:bg-slate-800 shadow">
-      <div class="container mx-auto px-4 py-4 flex items-center justify-between">
-        <router-link to="/" class="text-2xl font-bold text-purple-600 dark:text-purple-400">
-          🐙 Octopus
+  <div class="min-h-screen bg-zinc-50 dark:bg-zinc-950">
+    <!-- Header -->
+    <header class="sticky top-0 z-40 border-b border-zinc-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:border-zinc-800 dark:bg-zinc-950/95 dark:supports-[backdrop-filter]:bg-zinc-950/60">
+      <div class="container mx-auto flex h-14 items-center justify-between px-4">
+        <router-link to="/" class="flex items-center gap-2 font-semibold text-zinc-900 dark:text-zinc-50">
+          <Workflow class="h-5 w-5" />
+          <span>Octopus</span>
         </router-link>
-        <nav class="space-x-4">
+        <nav>
           <router-link 
             to="/workflows" 
-            class="text-slate-600 dark:text-slate-300 hover:text-purple-600 dark:hover:text-purple-400"
+            class="flex items-center gap-1 text-sm text-zinc-600 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50"
           >
-            ← Back to Workflows
+            <ArrowLeft class="h-4 w-4" />
+            Back to Workflows
           </router-link>
         </nav>
       </div>
     </header>
 
     <main class="container mx-auto px-4 py-8">
-      <div v-if="loading" class="text-center py-12 text-slate-500">
-        Loading workflow...
+      <!-- Loading State -->
+      <div v-if="loading" class="flex items-center justify-center py-16">
+        <Loader2 class="h-6 w-6 animate-spin text-zinc-400" />
+        <span class="ml-2 text-sm text-zinc-500">Loading workflow...</span>
       </div>
 
-      <div v-else-if="error" class="text-center py-12 text-red-500">
-        {{ error }}
+      <!-- Error State -->
+      <div v-else-if="error" class="flex flex-col items-center justify-center py-16">
+        <AlertCircle class="h-10 w-10 text-red-500" />
+        <p class="mt-2 text-sm text-red-600">{{ error }}</p>
       </div>
 
-      <div v-else-if="workflow" class="max-w-4xl mx-auto">
-        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-8">
-          <div class="flex items-center justify-between mb-4">
-            <h1 class="text-3xl font-bold text-slate-900 dark:text-white">
-              {{ workflow.name }}
-            </h1>
-            <span class="px-3 py-1 rounded-full text-sm font-medium capitalize"
-              :class="{
-                'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200': workflow.status === 'draft',
-                'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200': workflow.status === 'enabled',
-                'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200': workflow.status === 'disabled',
-              }"
-            >
-              {{ workflow.status }}
-            </span>
-          </div>
-          
-          <p class="text-slate-600 dark:text-slate-400 mb-6">
-            {{ workflow.description || 'No description' }}
-          </p>
-
-          <div class="grid grid-cols-2 gap-4 text-sm mb-8">
-            <div class="bg-slate-50 dark:bg-slate-700 rounded-lg p-4">
-              <div class="text-slate-500 dark:text-slate-400">ID</div>
-              <div class="font-mono text-slate-900 dark:text-white">{{ workflow.id }}</div>
+      <!-- Workflow Detail -->
+      <div v-else-if="workflow" class="mx-auto max-w-3xl space-y-6">
+        <!-- Main Info Card -->
+        <Card>
+          <CardHeader>
+            <div class="flex items-start justify-between">
+              <div>
+                <CardTitle class="text-xl">{{ workflow.name }}</CardTitle>
+                <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+                  {{ workflow.description || 'No description' }}
+                </p>
+              </div>
+              <Badge :variant="statusVariantMap[workflow.status] || 'secondary'">
+                {{ workflow.status }}
+              </Badge>
             </div>
-            <div class="bg-slate-50 dark:bg-slate-700 rounded-lg p-4">
-              <div class="text-slate-500 dark:text-slate-400">Version</div>
-              <div class="font-medium text-slate-900 dark:text-white">v{{ workflow.version }}</div>
+          </CardHeader>
+          <CardContent class="space-y-6">
+            <!-- Metadata Grid -->
+            <div class="grid grid-cols-2 gap-4 text-sm">
+              <div class="flex items-center gap-2 rounded-md bg-zinc-100 p-3 dark:bg-zinc-900">
+                <Hash class="h-4 w-4 text-zinc-500" />
+                <div>
+                  <div class="text-xs text-zinc-500 dark:text-zinc-400">ID</div>
+                  <div class="font-mono text-zinc-900 dark:text-zinc-50">{{ workflow.id }}</div>
+                </div>
+              </div>
+              <div class="flex items-center gap-2 rounded-md bg-zinc-100 p-3 dark:bg-zinc-900">
+                <GitBranch class="h-4 w-4 text-zinc-500" />
+                <div>
+                  <div class="text-xs text-zinc-500 dark:text-zinc-400">Version</div>
+                  <div class="font-medium text-zinc-900 dark:text-zinc-50">v{{ workflow.version }}</div>
+                </div>
+              </div>
+              <div class="flex items-center gap-2 rounded-md bg-zinc-100 p-3 dark:bg-zinc-900">
+                <Calendar class="h-4 w-4 text-zinc-500" />
+                <div>
+                  <div class="text-xs text-zinc-500 dark:text-zinc-400">Created</div>
+                  <div class="text-zinc-900 dark:text-zinc-50">{{ workflow.created_at }}</div>
+                </div>
+              </div>
+              <div class="flex items-center gap-2 rounded-md bg-zinc-100 p-3 dark:bg-zinc-900">
+                <Clock class="h-4 w-4 text-zinc-500" />
+                <div>
+                  <div class="text-xs text-zinc-500 dark:text-zinc-400">Updated</div>
+                  <div class="text-zinc-900 dark:text-zinc-50">{{ workflow.updated_at }}</div>
+                </div>
+              </div>
             </div>
-            <div class="bg-slate-50 dark:bg-slate-700 rounded-lg p-4">
-              <div class="text-slate-500 dark:text-slate-400">Created</div>
-              <div class="text-slate-900 dark:text-white">{{ workflow.created_at }}</div>
+
+            <Separator />
+
+            <!-- Actions -->
+            <div class="flex flex-wrap gap-3">
+              <Button as="router-link" :to="`/workflows/${workflow.id}/design`">
+                <Pencil class="h-4 w-4" />
+                Open Designer
+              </Button>
+              
+              <Button 
+                variant="outline"
+                @click="handleTriggerRun"
+                :disabled="triggering"
+              >
+                <Loader2 v-if="triggering" class="h-4 w-4 animate-spin" />
+                <Play v-else class="h-4 w-4" />
+                {{ workflow.status === 'draft' ? 'Trial Run' : 'Run Workflow' }}
+              </Button>
             </div>
-            <div class="bg-slate-50 dark:bg-slate-700 rounded-lg p-4">
-              <div class="text-slate-500 dark:text-slate-400">Updated</div>
-              <div class="text-slate-900 dark:text-white">{{ workflow.updated_at }}</div>
+
+            <p v-if="triggerError" class="text-sm text-red-500">
+              {{ triggerError }}
+            </p>
+
+            <!-- Workflow Definition Summary -->
+            <div v-if="workflow.nodes && workflow.nodes.length > 0">
+              <Separator class="my-4" />
+              <h3 class="text-sm font-medium text-zinc-900 dark:text-zinc-50">Workflow Definition</h3>
+              <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+                {{ workflow.nodes.length }} node(s), {{ workflow.edges?.length || 0 }} edge(s)
+              </p>
             </div>
-          </div>
+          </CardContent>
+        </Card>
 
-          <!-- Actions -->
-          <div class="flex flex-wrap gap-3">
-            <router-link
-              :to="`/workflows/${workflow.id}/design`"
-              class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg text-center transition-colors flex items-center gap-2"
-            >
-              🎨 Open Designer
-            </router-link>
-            
-            <button 
-              @click="handleTriggerRun"
-              :disabled="triggering"
-              class="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white font-medium rounded-lg transition-colors flex items-center gap-2"
-            >
-              <span v-if="triggering" class="animate-spin">⏳</span>
-              <span v-else>▶️</span>
-              {{ workflow.status === 'draft' ? 'Trial Run' : 'Run Workflow' }}
-            </button>
-          </div>
-
-          <div v-if="triggerError" class="mt-3 text-sm text-red-500">
-            {{ triggerError }}
-          </div>
-
-          <!-- Workflow Definition Summary -->
-          <div v-if="workflow.nodes && workflow.nodes.length > 0" class="mt-8">
-            <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">
-              Workflow Definition
-            </h2>
-            <div class="text-sm text-slate-600 dark:text-slate-400">
-              <p>{{ workflow.nodes.length }} node(s), {{ workflow.edges?.length || 0 }} edge(s)</p>
-            </div>
-          </div>
-
-          <!-- Recent Runs -->
-          <div class="mt-8">
-            <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">
-              Recent Executions
-            </h3>
-            
-            <div v-if="runs.length === 0" class="p-6 bg-slate-50 dark:bg-slate-700 rounded-xl text-center">
-              <div class="text-4xl mb-2">📭</div>
-              <p class="text-slate-500 dark:text-slate-400">No executions yet</p>
-              <p class="text-sm text-slate-400 dark:text-slate-500 mt-1">
+        <!-- Recent Executions Card -->
+        <Card>
+          <CardHeader>
+            <CardTitle class="text-base">Recent Executions</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <!-- Empty State -->
+            <div v-if="runs.length === 0" class="flex flex-col items-center py-8">
+              <Inbox class="h-10 w-10 text-zinc-300 dark:text-zinc-700" />
+              <p class="mt-2 text-sm text-zinc-500 dark:text-zinc-400">No executions yet</p>
+              <p class="text-xs text-zinc-400 dark:text-zinc-500">
                 Click the button above to {{ workflow.status === 'draft' ? 'trial run' : 'run' }} this workflow
               </p>
             </div>
             
-            <div v-else class="space-y-3">
-              <div 
+            <!-- Runs List -->
+            <div v-else class="space-y-2">
+              <button 
                 v-for="run in runs.slice(0, 5)" 
                 :key="run.id"
                 @click="viewRun(run.id)"
-                class="p-4 bg-slate-50 dark:bg-slate-700 rounded-lg cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-600 transition-colors"
+                class="flex w-full items-center justify-between rounded-md border border-zinc-200 p-3 text-left transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900"
               >
-                <div class="flex items-center justify-between">
-                  <div class="flex items-center gap-3">
-                    <span 
-                      :class="[
-                        'px-2 py-1 rounded-full text-xs font-medium',
-                        getRunStatusStyle(run.status)
-                      ]"
-                    >
-                      {{ run.status }}
-                    </span>
-                    <span class="font-medium text-slate-900 dark:text-white">
-                      Run #{{ run.id }}
-                    </span>
-                    <span 
-                      v-if="run.trigger_type === 'trial'"
-                      class="px-2 py-0.5 bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 rounded text-xs"
-                    >
-                      Trial
-                    </span>
-                  </div>
-                  <div class="text-sm text-slate-500 dark:text-slate-400">
-                    {{ formatTime(run.created_at) }}
-                  </div>
+                <div class="flex items-center gap-3">
+                  <Badge :variant="runStatusVariantMap[run.status] || 'secondary'" class="font-normal">
+                    {{ run.status }}
+                  </Badge>
+                  <span class="text-sm font-medium text-zinc-900 dark:text-zinc-50">
+                    Run #{{ run.id }}
+                  </span>
+                  <Badge v-if="run.trigger_type === 'trial'" variant="warning" class="font-normal">
+                    Trial
+                  </Badge>
                 </div>
-                <div v-if="run.error_message" class="mt-2 text-sm text-red-500 truncate">
-                  {{ run.error_message }}
-                </div>
-              </div>
+                <span class="text-xs text-zinc-500 dark:text-zinc-400">
+                  {{ formatTime(run.created_at) }}
+                </span>
+              </button>
               
-              <div v-if="runs.length > 5" class="text-center text-sm text-slate-500 dark:text-slate-400 py-2">
+              <p v-if="runs.length > 5" class="pt-2 text-center text-xs text-zinc-500 dark:text-zinc-400">
                 {{ runs.length - 5 }} more execution(s)...
-              </div>
+              </p>
             </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       </div>
     </main>
   </div>

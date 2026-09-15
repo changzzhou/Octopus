@@ -1,11 +1,20 @@
 <script setup lang="ts">
 import { NODE_TYPE_CONFIGS, type NodeType } from '../../types/workflow'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Separator } from '@/components/ui/separator'
+import { FileCode, Globe, User, CircleCheck, CircleX } from '@lucide/vue'
 
 const emit = defineEmits<{
   (e: 'dragstart', type: NodeType, event: DragEvent): void
 }>()
 
 const nodeTypes = Object.entries(NODE_TYPE_CONFIGS) as [NodeType, typeof NODE_TYPE_CONFIGS[NodeType]][]
+
+const nodeIcons: Record<NodeType, any> = {
+  script: FileCode,
+  http: Globe,
+  human: User,
+}
 
 function onDragStart(type: NodeType, event: DragEvent) {
   if (event.dataTransfer) {
@@ -17,155 +26,45 @@ function onDragStart(type: NodeType, event: DragEvent) {
 </script>
 
 <template>
-  <div class="node-palette">
-    <h3 class="palette-title">Node Palette</h3>
-    <p class="palette-hint">Drag nodes to canvas</p>
-    
-    <div class="palette-nodes">
+  <Card class="w-48">
+    <CardHeader class="px-4 py-3">
+      <CardTitle class="text-sm">Node Palette</CardTitle>
+      <p class="text-xs text-zinc-500 dark:text-zinc-400">Drag nodes to canvas</p>
+    </CardHeader>
+    <CardContent class="space-y-2 px-4 pb-4">
       <div
         v-for="[type, config] in nodeTypes"
         :key="type"
-        class="palette-node"
-        :style="{ borderColor: config.color }"
+        class="flex cursor-grab items-center gap-2 rounded-md border border-zinc-200 p-2 transition-all hover:-translate-y-0.5 hover:shadow-md active:cursor-grabbing dark:border-zinc-800"
+        :style="{ borderLeftColor: config.color, borderLeftWidth: '3px' }"
         draggable="true"
         @dragstart="onDragStart(type, $event)"
       >
-        <div class="node-icon" :style="{ backgroundColor: config.color }">
-          {{ config.icon }}
+        <div 
+          class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md"
+          :style="{ backgroundColor: config.color }"
+        >
+          <component :is="nodeIcons[type]" class="h-4 w-4 text-white" />
         </div>
-        <div class="node-info">
-          <div class="node-name">{{ config.label }}</div>
-          <div class="node-type">{{ type }}</div>
+        <div class="min-w-0 flex-1">
+          <div class="text-xs font-medium text-zinc-900 dark:text-zinc-50">{{ config.label }}</div>
+          <div class="font-mono text-[10px] text-zinc-500 dark:text-zinc-400">{{ type }}</div>
         </div>
       </div>
-    </div>
-    
-    <div class="palette-footer">
-      <div class="legend">
-        <div class="legend-item">
-          <span class="legend-dot success"></span>
+      
+      <Separator class="my-3" />
+      
+      <div class="space-y-1">
+        <p class="text-[10px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Edge Types</p>
+        <div class="flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400">
+          <CircleCheck class="h-3 w-3 text-emerald-500" />
           <span>Success</span>
         </div>
-        <div class="legend-item">
-          <span class="legend-dot failure"></span>
+        <div class="flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400">
+          <CircleX class="h-3 w-3 text-red-500" />
           <span>Failure</span>
         </div>
       </div>
-    </div>
-  </div>
+    </CardContent>
+  </Card>
 </template>
-
-<style scoped>
-.node-palette {
-  width: 200px;
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  height: fit-content;
-}
-
-.palette-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: #1f2937;
-  margin: 0 0 4px 0;
-}
-
-.palette-hint {
-  font-size: 12px;
-  color: #6b7280;
-  margin: 0 0 16px 0;
-}
-
-.palette-nodes {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.palette-node {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px;
-  border: 2px solid;
-  border-radius: 8px;
-  cursor: grab;
-  transition: all 0.2s;
-  background: white;
-}
-
-.palette-node:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-}
-
-.palette-node:active {
-  cursor: grabbing;
-}
-
-.node-icon {
-  width: 32px;
-  height: 32px;
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 16px;
-  flex-shrink: 0;
-}
-
-.node-info {
-  flex: 1;
-  min-width: 0;
-}
-
-.node-name {
-  font-size: 12px;
-  font-weight: 600;
-  color: #1f2937;
-}
-
-.node-type {
-  font-size: 10px;
-  color: #9ca3af;
-  font-family: monospace;
-}
-
-.palette-footer {
-  margin-top: 16px;
-  padding-top: 12px;
-  border-top: 1px solid #e5e7eb;
-}
-
-.legend {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.legend-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 11px;
-  color: #6b7280;
-}
-
-.legend-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-}
-
-.legend-dot.success {
-  background: #10b981;
-}
-
-.legend-dot.failure {
-  background: #ef4444;
-}
-</style>

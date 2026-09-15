@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Handle, Position } from '@vue-flow/core'
 import type { WorkflowNodeData, HumanNodeConfig } from '../../types/workflow'
+import { User, Mail, Check, X } from '@lucide/vue'
 
 defineProps<{
   id: string
@@ -21,13 +22,13 @@ defineProps<{
     />
     
     <div class="node-header">
-      <span class="node-icon">👤</span>
+      <User class="h-4 w-4" />
       <span class="node-title">{{ data.label || 'Human Task' }}</span>
     </div>
     
     <div class="node-content">
       <div v-if="(data.config as HumanNodeConfig).assignee" class="node-assignee">
-        <span class="assignee-icon">📧</span>
+        <Mail class="h-3 w-3" />
         {{ (data.config as HumanNodeConfig).assignee }}
       </div>
       <div class="node-instructions" :title="(data.config as HumanNodeConfig).instructions">
@@ -51,8 +52,12 @@ defineProps<{
     />
     
     <div class="handle-labels">
-      <span class="handle-label success" style="top: 35%">✓</span>
-      <span class="handle-label failure" style="top: 65%">✗</span>
+      <span class="handle-label success" style="top: 35%">
+        <Check class="h-2.5 w-2.5" />
+      </span>
+      <span class="handle-label failure" style="top: 65%">
+        <X class="h-2.5 w-2.5" />
+      </span>
     </div>
   </div>
 </template>
@@ -61,84 +66,76 @@ defineProps<{
 .workflow-node {
   background: white;
   border: 2px solid #f59e0b;
-  border-radius: 8px;
+  border-radius: 6px;
   padding: 0;
-  min-width: 160px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  min-width: 150px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   position: relative;
 }
 
 .workflow-node.selected {
-  border-color: #7c3aed;
-  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.3);
+  border-color: #18181b;
+  box-shadow: 0 0 0 2px rgba(24, 24, 27, 0.2);
 }
 
 .node-header {
   background: #f59e0b;
   color: white;
-  padding: 8px 12px;
-  border-radius: 6px 6px 0 0;
+  padding: 6px 10px;
+  border-radius: 4px 4px 0 0;
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-weight: 600;
-  font-size: 13px;
-}
-
-.node-icon {
-  font-size: 16px;
+  gap: 6px;
+  font-weight: 500;
+  font-size: 12px;
 }
 
 .node-content {
-  padding: 10px 12px;
+  padding: 8px 10px;
 }
 
 .node-assignee {
-  font-size: 11px;
-  color: #92400e;
-  background: #fef3c7;
+  font-size: 10px;
+  color: #a16207;
+  background: #fefce8;
   padding: 2px 6px;
   border-radius: 4px;
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  margin-bottom: 6px;
-}
-
-.assignee-icon {
-  font-size: 10px;
+  margin-bottom: 4px;
 }
 
 .node-instructions {
-  font-size: 11px;
-  color: #6b7280;
+  font-size: 10px;
+  color: #71717a;
   line-height: 1.4;
 }
 
 .handle-input {
-  width: 12px !important;
-  height: 12px !important;
-  background: #6b7280 !important;
+  width: 10px !important;
+  height: 10px !important;
+  background: #71717a !important;
   border: 2px solid white !important;
 }
 
 .handle-success {
-  width: 12px !important;
-  height: 12px !important;
+  width: 10px !important;
+  height: 10px !important;
   background: #10b981 !important;
   border: 2px solid white !important;
 }
 
 .handle-failure {
-  width: 12px !important;
-  height: 12px !important;
+  width: 10px !important;
+  height: 10px !important;
   background: #ef4444 !important;
   border: 2px solid white !important;
 }
 
 .handle-labels {
   position: absolute;
-  right: 16px;
+  right: 14px;
   top: 0;
   bottom: 0;
   pointer-events: none;
@@ -146,8 +143,10 @@ defineProps<{
 
 .handle-label {
   position: absolute;
-  font-size: 10px;
   transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .handle-label.success {

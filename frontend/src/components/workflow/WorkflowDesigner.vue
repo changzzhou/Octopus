@@ -11,6 +11,10 @@ import HumanNode from './HumanNode.vue'
 import NodePalette from './NodePalette.vue'
 import ConfigSidebar from './ConfigSidebar.vue'
 
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Save, Loader2, Paintbrush } from '@lucide/vue'
+
 import type { 
   Node,
   Edge,
@@ -55,13 +59,8 @@ const isFlowReady = ref(false)
 
 const flowId = `workflow-${props.workflowId}`
 
-// Store the VueFlow instance received from @init event
 const vfInstance = ref<VueFlowStore | null>(null)
-
-// Ref to VueFlow component for getBoundingClientRect
 const vueFlowRef = ref<ComponentPublicInstance | null>(null)
-
-// Track node count for empty state display (updated after addNodes)
 const nodeCount = ref(0)
 
 function updateNodeCount() {
@@ -74,11 +73,9 @@ function updateNodeCount() {
   nodeCount.value = Array.isArray(nodes) ? nodes.length : 0
 }
 
-// Handle VueFlow init event - receive the store instance
 function handleInit(instance: VueFlowStore) {
   vfInstance.value = instance
   
-  // Load initial nodes/edges into the instance (NOT via props binding)
   if (props.initialNodes?.length) {
     const vfNodes = props.initialNodes.map(fromBeNode)
     instance.setNodes(vfNodes)
@@ -141,13 +138,11 @@ function onDrop(event: DragEvent) {
   const type = event.dataTransfer?.getData('application/vueflow-nodetype') as NodeType
   if (!type) return
   
-  // Get VueFlow element bounds
   const el = vueFlowRef.value?.$el as HTMLElement | undefined
   if (!el) return
   
   const bounds = el.getBoundingClientRect()
   
-  // Convert screen coordinates to flow coordinates
   const position = vfInstance.value.screenToFlowCoordinate({
     x: event.clientX - bounds.left,
     y: event.clientY - bounds.top,
@@ -286,35 +281,37 @@ defineExpose({
 </script>
 
 <template>
-  <div class="workflow-designer">
-    <div class="designer-toolbar">
-      <div class="toolbar-left">
-        <h2 class="workflow-title">{{ workflowName }}</h2>
-        <span class="version-badge">v{{ workflowVersion }}</span>
-        <span v-if="isDirty" class="unsaved-badge">Unsaved</span>
+  <div class="flex flex-1 flex-col overflow-hidden">
+    <!-- Toolbar -->
+    <div class="flex h-12 flex-shrink-0 items-center justify-between border-b border-zinc-200 bg-white px-4 dark:border-zinc-800 dark:bg-zinc-950">
+      <div class="flex items-center gap-3">
+        <h2 class="text-sm font-medium text-zinc-900 dark:text-zinc-50">{{ workflowName }}</h2>
+        <Badge variant="outline" class="font-mono text-xs">v{{ workflowVersion }}</Badge>
+        <Badge v-if="isDirty" variant="warning" class="text-xs">Unsaved</Badge>
       </div>
-      <div class="toolbar-right">
-        <button 
-          class="btn btn-primary"
+      <div class="flex items-center gap-2">
+        <Button 
+          size="sm"
           :disabled="!isDirty || saving"
           @click="saveWorkflow"
         >
-          <span v-if="saving">Saving...</span>
-          <span v-else>💾 Save</span>
-        </button>
+          <Loader2 v-if="saving" class="h-4 w-4 animate-spin" />
+          <Save v-else class="h-4 w-4" />
+          {{ saving ? 'Saving...' : 'Save' }}
+        </Button>
       </div>
     </div>
     
-    <div class="designer-content">
-      <NodePalette class="designer-palette" />
+    <!-- Designer Content -->
+    <div class="flex flex-1 gap-4 overflow-hidden p-4">
+      <NodePalette class="flex-shrink-0" />
       
-      <!-- Drop zone wrapper -->
+      <!-- Canvas -->
       <div 
-        class="designer-canvas"
+        class="relative flex-1 overflow-hidden rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950"
         @drop.capture="onDrop"
         @dragover.capture="onDragOver"
       >
-        <!-- VueFlow - NO controlled :nodes/:edges binding, use instance methods only -->
         <VueFlow
           ref="vueFlowRef"
           :id="flowId"
@@ -335,20 +332,22 @@ defineExpose({
           <MiniMap position="bottom-right" />
         </VueFlow>
         
-        <div v-if="nodeCount === 0 && isFlowReady" class="empty-canvas">
-          <div class="empty-icon">🎨</div>
-          <p class="empty-title">Start Building Your Workflow</p>
-          <p class="empty-hint">Drag nodes from the palette to get started</p>
+        <!-- Empty State -->
+        <div v-if="nodeCount === 0 && isFlowReady" class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+          <Paintbrush class="h-12 w-12 text-zinc-300 dark:text-zinc-700" />
+          <p class="mt-4 text-sm font-medium text-zinc-700 dark:text-zinc-300">Start Building Your Workflow</p>
+          <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-500">Drag nodes from the palette to get started</p>
         </div>
         
-        <div v-if="!isFlowReady" class="loading-canvas">
-          <div class="spinner"></div>
-          <p>Initializing canvas...</p>
+        <!-- Loading State -->
+        <div v-if="!isFlowReady" class="absolute inset-0 flex flex-col items-center justify-center bg-white/90 dark:bg-zinc-950/90">
+          <Loader2 class="h-8 w-8 animate-spin text-zinc-400" />
+          <p class="mt-3 text-sm text-zinc-500">Initializing canvas...</p>
         </div>
       </div>
       
       <ConfigSidebar
-        class="designer-sidebar"
+        class="flex-shrink-0"
         :node="selectedNode"
         @update="updateNodeData"
         @delete="deleteNode"
@@ -366,174 +365,16 @@ defineExpose({
 </style>
 
 <style scoped>
-.workflow-designer {
-  display: flex;
-  flex-direction: column;
-  /* Use flex: 1 to properly fill parent flex container */
-  flex: 1;
-  min-height: 0; /* Allow flex shrinking */
-  background: #f1f5f9;
-}
-
-.designer-toolbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 20px;
-  background: white;
-  border-bottom: 1px solid #e2e8f0;
-}
-
-.toolbar-left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.workflow-title {
-  font-size: 18px;
-  font-weight: 600;
-  color: #1f2937;
-  margin: 0;
-}
-
-.version-badge {
-  background: #e0e7ff;
-  color: #3730a3;
-  padding: 2px 8px;
-  border-radius: 12px;
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.unsaved-badge {
-  background: #fef3c7;
-  color: #92400e;
-  padding: 2px 8px;
-  border-radius: 12px;
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.toolbar-right {
-  display: flex;
-  gap: 8px;
-}
-
-.btn {
-  padding: 8px 16px;
-  border: none;
-  border-radius: 6px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.btn-primary {
-  background: #7c3aed;
-  color: white;
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: #6d28d9;
-}
-
-.btn-primary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.designer-content {
-  flex: 1;
-  display: flex;
-  gap: 16px;
-  padding: 16px;
-  overflow: hidden;
-  min-height: 0; /* Allow flex shrinking */
-}
-
-.designer-palette {
-  flex-shrink: 0;
-}
-
-.designer-canvas {
-  flex: 1;
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-  position: relative;
-  overflow: hidden;
-  min-height: 0; /* Allow flex shrinking */
-  min-width: 0; /* Allow flex shrinking */
-}
-
-/* Ensure VueFlow fills its container */
-.designer-canvas :deep(.vue-flow) {
-  position: absolute !important;
-  inset: 0 !important;
-}
-
-.designer-sidebar {
-  flex-shrink: 0;
-}
-
-.empty-canvas,
-.loading-canvas {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  pointer-events: none;
-  z-index: 1;
-}
-
-.empty-icon {
-  font-size: 48px;
-  margin-bottom: 16px;
-}
-
-.empty-title {
-  font-size: 18px;
-  font-weight: 600;
-  color: #1f2937;
-  margin: 0 0 8px;
-}
-
-.empty-hint {
-  font-size: 14px;
-  color: #6b7280;
-  margin: 0;
-}
-
-.loading-canvas {
-  background: rgba(255, 255, 255, 0.9);
-}
-
-.spinner {
-  width: 32px;
-  height: 32px;
-  border: 3px solid #e2e8f0;
-  border-top-color: #7c3aed;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin-bottom: 12px;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
 :deep(.vue-flow__minimap) {
   border-radius: 8px;
   overflow: hidden;
+  border: 1px solid #e4e4e7;
 }
 
 :deep(.vue-flow__controls) {
   border-radius: 8px;
   overflow: hidden;
+  border: 1px solid #e4e4e7;
 }
 
 :deep(.vue-flow__edge-path) {

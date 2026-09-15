@@ -4,6 +4,16 @@ import { useRoute, onBeforeRouteLeave } from 'vue-router'
 import { getWorkflowDetail, saveWorkflow, type WorkflowDetail, type SaveWorkflowRequest } from '../api/workflows'
 import type { Node, Edge, CanvasMeta } from '../types/workflow'
 import WorkflowDesigner from '../components/workflow/WorkflowDesigner.vue'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Separator } from '@/components/ui/separator'
+import { 
+  Workflow, 
+  ArrowLeft, 
+  Check, 
+  AlertTriangle,
+  Loader2,
+} from '@lucide/vue'
 
 const route = useRoute()
 
@@ -13,6 +23,12 @@ const error = ref<string | null>(null)
 const saveStatus = ref<'idle' | 'saving' | 'saved' | 'error'>('idle')
 const saveError = ref<string | null>(null)
 const designerRef = ref<InstanceType<typeof WorkflowDesigner> | null>(null)
+
+const statusVariantMap: Record<string, 'secondary' | 'success' | 'destructive'> = {
+  draft: 'secondary',
+  enabled: 'success',
+  disabled: 'destructive',
+}
 
 onMounted(async () => {
   await loadWorkflow()
@@ -100,62 +116,97 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="workflow-design-page">
-    <header class="page-header">
-      <div class="header-left">
-        <router-link to="/" class="logo">
-          🐙 Octopus
+  <div class="flex h-screen flex-col bg-zinc-100 dark:bg-zinc-900">
+    <!-- Header -->
+    <header class="flex h-14 flex-shrink-0 items-center justify-between border-b border-zinc-200 bg-white px-4 dark:border-zinc-800 dark:bg-zinc-950">
+      <div class="flex items-center gap-2">
+        <router-link to="/" class="flex items-center gap-2 font-semibold text-zinc-900 dark:text-zinc-50">
+          <Workflow class="h-5 w-5" />
+          <span>Octopus</span>
         </router-link>
-        <span class="header-divider">/</span>
-        <router-link to="/workflows" class="breadcrumb">
+        
+        <Separator orientation="vertical" class="mx-2 h-5" />
+        
+        <router-link 
+          to="/workflows" 
+          class="text-sm text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50"
+        >
           Workflows
         </router-link>
-        <span class="header-divider">/</span>
+        
+        <span class="text-zinc-300 dark:text-zinc-700">/</span>
+        
         <router-link 
           v-if="workflow" 
           :to="`/workflows/${workflow.id}`" 
-          class="breadcrumb"
+          class="text-sm text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50"
         >
           {{ workflow.name }}
         </router-link>
-        <span v-else class="breadcrumb">Loading...</span>
-        <span class="header-divider">/</span>
-        <span class="current-page">Design</span>
-        <span v-if="workflow" class="status-badge" :class="workflow.status">
-          {{ workflow.status }}
-        </span>
-      </div>
-      <nav class="header-right">
-        <div v-if="saveStatus === 'saved'" class="save-indicator saved">
-          ✓ Saved
-        </div>
-        <div v-else-if="saveStatus === 'error'" class="save-indicator error" :title="saveError || undefined">
-          ⚠ Error saving
-        </div>
-        <router-link 
-          v-if="workflow"
-          :to="`/workflows/${workflow.id}`"
-          class="back-link"
+        <span v-else class="text-sm text-zinc-500">Loading...</span>
+        
+        <span class="text-zinc-300 dark:text-zinc-700">/</span>
+        
+        <span class="text-sm font-medium text-zinc-900 dark:text-zinc-50">Design</span>
+        
+        <Badge 
+          v-if="workflow" 
+          :variant="statusVariantMap[workflow.status] || 'secondary'"
+          class="ml-2"
         >
-          ← Back to Details
-        </router-link>
-      </nav>
+          {{ workflow.status }}
+        </Badge>
+      </div>
+      
+      <div class="flex items-center gap-3">
+        <!-- Save Status Indicator -->
+        <div 
+          v-if="saveStatus === 'saved'" 
+          class="flex items-center gap-1 text-sm text-emerald-600 dark:text-emerald-400"
+        >
+          <Check class="h-4 w-4" />
+          <span>Saved</span>
+        </div>
+        <div 
+          v-else-if="saveStatus === 'error'" 
+          class="flex items-center gap-1 text-sm text-red-600 dark:text-red-400"
+          :title="saveError || undefined"
+        >
+          <AlertTriangle class="h-4 w-4" />
+          <span>Error saving</span>
+        </div>
+        
+        <Button
+          v-if="workflow"
+          variant="outline"
+          size="sm"
+          as="router-link"
+          :to="`/workflows/${workflow.id}`"
+        >
+          <ArrowLeft class="h-4 w-4" />
+          Back to Details
+        </Button>
+      </div>
     </header>
 
-    <main class="page-content">
-      <div v-if="loading" class="loading-state">
-        <div class="spinner"></div>
-        <p>Loading workflow...</p>
+    <!-- Main Content -->
+    <main class="flex flex-1 flex-col overflow-hidden">
+      <!-- Loading State -->
+      <div v-if="loading" class="flex flex-1 items-center justify-center">
+        <Loader2 class="h-8 w-8 animate-spin text-zinc-400" />
+        <span class="ml-3 text-zinc-500">Loading workflow...</span>
       </div>
 
-      <div v-else-if="error" class="error-state">
-        <div class="error-icon">⚠️</div>
-        <p>{{ error }}</p>
-        <button class="btn btn-secondary" @click="loadWorkflow">
+      <!-- Error State -->
+      <div v-else-if="error" class="flex flex-1 flex-col items-center justify-center gap-4">
+        <AlertTriangle class="h-12 w-12 text-red-500" />
+        <p class="text-red-600">{{ error }}</p>
+        <Button variant="outline" @click="loadWorkflow">
           Try Again
-        </button>
+        </Button>
       </div>
 
+      <!-- Designer -->
       <WorkflowDesigner
         v-else-if="workflow"
         ref="designerRef"
@@ -171,173 +222,3 @@ onBeforeUnmount(() => {
     </main>
   </div>
 </template>
-
-<style scoped>
-.workflow-design-page {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  background: #f1f5f9;
-}
-
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0 20px;
-  height: 56px;
-  background: white;
-  border-bottom: 1px solid #e2e8f0;
-  flex-shrink: 0;
-}
-
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.logo {
-  font-size: 20px;
-  font-weight: 700;
-  color: #7c3aed;
-  text-decoration: none;
-}
-
-.header-divider {
-  color: #cbd5e1;
-}
-
-.breadcrumb {
-  color: #64748b;
-  text-decoration: none;
-  font-size: 14px;
-}
-
-.breadcrumb:hover {
-  color: #7c3aed;
-}
-
-.current-page {
-  font-size: 14px;
-  font-weight: 500;
-  color: #1e293b;
-}
-
-.status-badge {
-  padding: 2px 8px;
-  border-radius: 12px;
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  margin-left: 8px;
-}
-
-.status-badge.draft {
-  background: #fef3c7;
-  color: #92400e;
-}
-
-.status-badge.enabled {
-  background: #d1fae5;
-  color: #065f46;
-}
-
-.status-badge.disabled {
-  background: #fee2e2;
-  color: #991b1b;
-}
-
-.header-right {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.save-indicator {
-  font-size: 13px;
-  padding: 4px 10px;
-  border-radius: 12px;
-}
-
-.save-indicator.saved {
-  background: #d1fae5;
-  color: #065f46;
-}
-
-.save-indicator.error {
-  background: #fee2e2;
-  color: #991b1b;
-  cursor: help;
-}
-
-.back-link {
-  color: #64748b;
-  text-decoration: none;
-  font-size: 14px;
-  transition: color 0.2s;
-}
-
-.back-link:hover {
-  color: #7c3aed;
-}
-
-.page-content {
-  flex: 1;
-  overflow: hidden;
-  /* WorkflowDesigner needs parent to be flex to inherit height correctly */
-  display: flex;
-  flex-direction: column;
-}
-
-.loading-state,
-.error-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  gap: 16px;
-  color: #64748b;
-}
-
-.spinner {
-  width: 32px;
-  height: 32px;
-  border: 3px solid #e2e8f0;
-  border-top-color: #7c3aed;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-.error-icon {
-  font-size: 48px;
-}
-
-.error-state p {
-  color: #dc2626;
-}
-
-.btn {
-  padding: 10px 20px;
-  border: none;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.btn-secondary {
-  background: #e2e8f0;
-  color: #475569;
-}
-
-.btn-secondary:hover {
-  background: #cbd5e1;
-}
-</style>
