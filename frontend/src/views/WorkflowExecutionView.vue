@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { 
   getRun, 
   getRunSteps, 
-  pollRunStatus,
+  subscribeRunLive,
   type Run, 
   type Step, 
   type RunStatus,
@@ -42,8 +42,9 @@ const steps = ref<Step[]>([])
 const loading = ref(true)
 const error = ref<string | null>(null)
 const selectedStepId = ref<string | null>(null)
+const connectionMode = ref<'sse' | 'polling' | 'disconnected'>('disconnected')
 
-let stopPolling: (() => void) | null = null
+let stopSubscription: (() => void) | null = null
 
 interface StatusConfig {
   label: string
@@ -166,7 +167,7 @@ async function loadInitialData() {
     
     const isTerminal = ['succeeded', 'failed', 'cancelled'].includes(run.value.status)
     if (!isTerminal) {
-      startPolling()
+      startLiveSubscription()
     }
   } catch (e) {
     error.value = 'Failed to load execution data'
@@ -176,13 +177,21 @@ async function loadInitialData() {
   }
 }
 
-function startPolling() {
-  if (stopPolling) stopPolling()
+function startLiveSubscription() {
+  if (stopSubscription) stopSubscription()
   
-  stopPolling = pollRunStatus(runId.value, (updatedRun, updatedSteps) => {
-    run.value = updatedRun
-    steps.value = updatedSteps
-  })
+  stopSubscription = subscribeRunLive(
+    runId.value,
+    (updatedRun, updatedSteps) => {
+      run.value = updatedRun
+      steps.value = updatedSteps
+    },
+    {
+      onConnectionChange: (mode) => {
+        connectionMode.value = mode
+      },
+    }
+  )
 }
 
 function goBack() {
@@ -190,9 +199,9 @@ function goBack() {
 }
 
 watch(runId, () => {
-  if (stopPolling) {
-    stopPolling()
-    stopPolling = null
+  if (stopSubscription) {
+    stopSubscription()
+    stopSubscription = null
   }
   loadInitialData()
 })
@@ -200,9 +209,9 @@ watch(runId, () => {
 onMounted(loadInitialData)
 
 onUnmounted(() => {
-  if (stopPolling) {
-    stopPolling()
-    stopPolling = null
+  if (stopSubscription) {
+    stopSubscription()
+    stopSubscription = null
   }
 })
 </script>
@@ -576,13 +585,15 @@ onUnmounted(() => {
           </Card>
         </div>
 
-        <!-- Polling Indicator -->
+        <!-- Live Update Indicator -->
         <div 
           v-if="run && !['succeeded', 'failed', 'cancelled'].includes(run.status)"
           class="fixed bottom-4 right-4 flex items-center gap-2 rounded-full border border-zinc-200 bg-white px-4 py-2 text-sm shadow-lg dark:border-zinc-800 dark:bg-zinc-950"
         >
           <Loader2 class="h-4 w-4 animate-spin text-blue-500" />
-          <span class="text-zinc-600 dark:text-zinc-400">Live updates...</span>
+          <span class="text-zinc-600 dark:text-zinc-400">
+            {{ connectionMode === 'sse' ? 'Live (SSE)' : connectionMode === 'polling' ? 'Live (Polling)' : 'Connecting...' }}
+          </span>
         </div>
       </div>
     </main>
