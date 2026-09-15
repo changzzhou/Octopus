@@ -8,7 +8,11 @@ import type {
   WorkflowStatus,
 } from '../types/workflow'
 
-const API_BASE = '/api/v1'
+/**
+ * API base URL - configurable via VITE_API_BASE_URL environment variable.
+ * Default: /api/v1 (proxied to backend at :8888 via Vite dev server)
+ */
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api/v1'
 
 // Re-export types
 export type { WorkflowDetail, WorkflowSummary, SaveWorkflowRequest, WorkflowStatus }
@@ -900,4 +904,138 @@ export function pollRunStatus(
   return () => {
     active = false
   }
+}
+
+/**
+ * Live subscription manager: SSE-first with polling fallback.
+ * 
+ * Strategy:
+ * 1. Attempt SSE connection to /api/v1/runs/:runId/events
+ * 2. On SSE error, fall back to polling
+ * 3. On SSE terminal event, close connection
+ * 4. Always fetch full state on connect for consistency
+ * 
+ * @param runId - The run ID to subscribe to
+ * @param onUpdate - Callback for state updates (run + steps)
+ * @param options - Configuration options
+ * @returns Cleanup function to stop all subscriptions
+ */
+export interface LiveSubscriptionOptions {
+  pollIntervalMs?: number
+  onConnectionChange?: (mode: 'sse' | 'polling' | 'disconnected') => void
+}
+
+export function subscribeRunLive(
+  runId: number,
+  onUpdate: (run: Run, steps: Step[]) => void,
+  options: LiveSubscriptionOptions = {}
+): () => void {
+  const { pollIntervalMs = 2000, onConnectionChange } = options
+  
+  let active = true
+  let sseSubscription: SSESubscription | null = null
+  let pollCleanup: (() => void) | null = null
+  let connectionMode: 'sse' | 'polling' | 'disconnected' = 'disconnected'
+  
+  function setMode(mode: 'sse' | 'polling' | 'disconnected') {
+    if (connectionMode !== mode) {
+      connectionMode = mode
+      onConnectionChange?.(mode)
+    }
+  }
+  
+  async function fetchFullState(): Promise<{ run: Run; steps: Step[] } | null> {
+    try {
+      const [runRes, stepsRes] = await Promise.all([
+        getRun(runId),
+        getRunSteps(runId),
+      ])
+      return { run: runRes.run, steps: stepsRes.steps }
+    } catch (e) {
+      console.error('Failed to fetch run state:', e)
+      return null
+    }
+  }
+  
+  function startPolling() {
+    if (!active || pollCleanup) return
+    
+    setMode('polling')
+    pollCleanup = pollRunStatus(runId, (run, steps) => {
+      if (!active) return
+      onUpdate(run, steps)
+      
+      if (['succeeded', 'failed', 'cancelled'].includes(run.status)) {
+        cleanup()
+      }
+    }, pollIntervalMs)
+  }
+  
+  function startSSE() {
+    if (!active || isMockEnabled()) {
+      startPolling()
+      return
+    }
+    
+    setMode('sse')
+    
+    sseSubscription = subscribeRunEvents(
+      runId,
+      async (event) => {
+        if (!active) return
+        
+        const state = await fetchFullState()
+        if (state && active) {
+          onUpdate(state.run, state.steps)
+        }
+        
+        if (event.event_type === SSE_EVENT_TYPES.RUN_TERMINAL) {
+          cleanup()
+        }
+      },
+      (_error) => {
+        if (!active) return
+        console.warn('SSE connection failed, falling back to polling')
+        
+        if (sseSubscription) {
+          sseSubscription.close()
+          sseSubscription = null
+        }
+        
+        startPolling()
+      }
+    )
+  }
+  
+  function cleanup() {
+    active = false
+    setMode('disconnected')
+    
+    if (sseSubscription) {
+      sseSubscription.close()
+      sseSubscription = null
+    }
+    
+    if (pollCleanup) {
+      pollCleanup()
+      pollCleanup = null
+    }
+  }
+  
+  fetchFullState().then((state) => {
+    if (!active) return
+    
+    if (state) {
+      onUpdate(state.run, state.steps)
+      
+      if (['succeeded', 'failed', 'cancelled'].includes(state.run.status)) {
+        cleanup()
+        return
+      }
+    }
+    
+    startSSE()
+  })
+  
+  return cleanup
 }
