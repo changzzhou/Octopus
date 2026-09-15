@@ -237,6 +237,28 @@ type GetRunStepsResp {
 	Steps []Step `json:"steps"`
 }
 
+// List runs by workflow (BE-6)
+type ListRunsByWorkflowReq {
+	Id int64 `path:"id"`
+}
+
+type RunSummary {
+	Id              int64  `json:"id"`
+	WorkflowId      int64  `json:"workflow_id"`
+	WorkflowVersion int    `json:"workflow_version"`
+	Status          string `json:"status"`
+	TriggerType     string `json:"trigger_type"`
+	StartedAt       string `json:"started_at,optional"`
+	FinishedAt      string `json:"finished_at,optional"`
+	ErrorMessage    string `json:"error_message,optional"`
+	CreatedAt       string `json:"created_at"`
+	UpdatedAt       string `json:"updated_at"`
+}
+
+type ListRunsByWorkflowResp {
+	Runs []RunSummary `json:"runs"`
+}
+
 // SSE Events (BE-3)
 type GetRunEventsReq {
 	RunId int64 `path:"runId"`
@@ -285,6 +307,10 @@ service workflow-api {
 	@doc "Trigger a workflow run (draft allowed)"
 	@handler TriggerRunHandler
 	post /workflows/:id/runs (TriggerRunReq) returns (TriggerRunResp)
+
+	@doc "List runs by workflow"
+	@handler ListRunsByWorkflowHandler
+	get /workflows/:id/runs (ListRunsByWorkflowReq) returns (ListRunsByWorkflowResp)
 
 	@doc "Get run details"
 	@handler GetRunHandler

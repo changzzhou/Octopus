@@ -87,6 +87,12 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Handler: TriggerRunHandler(serverCtx),
 			},
 			{
+				// List runs by workflow
+				Method:  http.MethodGet,
+				Path:    "/workflows/:id/runs",
+				Handler: ListRunsByWorkflowHandler(serverCtx),
+			},
+			{
 				// Validate workflow structure
 				Method:  http.MethodPost,
 				Path:    "/workflows/:id/validate",
