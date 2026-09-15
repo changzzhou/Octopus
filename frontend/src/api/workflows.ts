@@ -8,7 +8,11 @@ import type {
   WorkflowStatus,
 } from '../types/workflow'
 
-const API_BASE = '/api/v1'
+/**
+ * API base URL - configurable via VITE_API_BASE_URL environment variable.
+ * Default: /api/v1 (proxied to backend at :8888 via Vite dev server)
+ */
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api/v1'
 
 // Re-export types
 export type { WorkflowDetail, WorkflowSummary, SaveWorkflowRequest, WorkflowStatus }
